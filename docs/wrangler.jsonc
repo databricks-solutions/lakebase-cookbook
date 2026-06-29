@@ -1,0 +1,12 @@
+{
+  "name": "lakebase-cookbook",
+  "compatibility_date": "2025-04-01",
+  "assets": {
+    "directory": "./build",
+  },
+  "preview_urls": true,
+  "routes": [
+    { "pattern": "lakebase-cookbook.com", "custom_domain": true },
+    { "pattern": "www.lakebase-cookbook.com", "custom_domain": true },
+  ],
+}

@@ -2,6 +2,7 @@
 
 Examples and guides to accelerate your Lakebase projects:
 
+- Cookbook site: https://lakebase-cookbook.com
 - Official Lakebase announcment blog: https://www.databricks.com/product/lakebase
 - Official Documentation: https://docs.databricks.com/aws/en/oltp/
 
@@ -30,6 +31,34 @@ Contributing Guidelines:
 - Database configurations should be small to reduce spend
 - UV as package manager
 - Ruff as linter
+
+## Documentation site
+
+This repo also publishes a documentation site (Docusaurus) hosted on Cloudflare
+Workers at **https://lakebase-cookbook.com**. The site source lives in
+[`docs/`](docs/), and common tasks are wrapped in the [`Makefile`](Makefile)
+(run `make help` to list them).
+
+You can preview and contribute to the site without any Cloudflare account or
+credentials:
+
+```bash
+make install    # one-time: install site dependencies
+make dev        # local dev server with hot reload at http://localhost:3000
+make build      # build the static site into docs/build (verifies the build)
+```
+
+To add or edit content:
+
+- **Docs / examples** — add or edit Markdown in [`docs/docs/`](docs/docs/). New
+  files under `docs/docs/examples/` automatically appear in the sidebar.
+- **Blog posts** — add Markdown to `docs/blog/`.
+- **Landing page / styling** — `docs/src/` (React/TSX pages, components, and CSS).
+- **Navbar, footer, site config** — `docs/docusaurus.config.ts`.
+
+Then open a pull request. Deploys are handled by a maintainer after merge and
+require Cloudflare credentials that are **not** stored in this repo, so cloning or
+forking does not grant any ability to deploy.
 
 ## License
 
