@@ -1,0 +1,23 @@
+[project]
+name = "graphrag-lakebase"
+version = "0.1.0"
+description = "GraphRAG on Lakebase — knowledge-graph-augmented retrieval with pgvector + recursive CTEs"
+requires-python = ">=3.11"
+dependencies = [
+    "psycopg[binary]>=3.1",
+    "databricks-sdk>=0.81",
+]
+
+[dependency-groups]
+dev = [
+    "duckdb>=1.0",
+    "numpy>=1.26",
+    "ruff>=0.6",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
