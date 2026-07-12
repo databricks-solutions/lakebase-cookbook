@@ -77,9 +77,10 @@ w = WorkspaceClient()
 
 
 def embed(texts):
-    # OpenAI-compatible embeddings query; verify shape against your SDK version.
+    # resp.data items are typed objects (EmbeddingsV1ResponseEmbeddingElement) — use
+    # attribute access, not dict subscript. Verified against databricks-sdk on a live run.
     resp = w.serving_endpoints.query(name=EMBED_ENDPOINT, input=texts)
-    return [d["embedding"] for d in resp.data]
+    return [d.embedding for d in resp.data]
 
 
 node_ids = list(nodes.keys())
