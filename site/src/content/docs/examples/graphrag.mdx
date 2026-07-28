@@ -1,0 +1,81 @@
+---
+title: GraphRAG on Lakebase
+sidebar_label: GraphRAG
+sidebar_position: 15
+description: Knowledge-graph-augmented RAG served entirely from Lakebase — pgvector semantic seed plus recursive-CTE graph traversal.
+---
+import Callout from '../../../components/Callout.astro';
+
+# GraphRAG on Lakebase
+
+Knowledge-graph-augmented RAG served entirely from **Lakebase** (managed
+Postgres). Classic RAG retrieves text chunks by vector similarity and misses the
+*relationships* between them. GraphRAG adds a knowledge graph so retrieval can
+**traverse relationships**, not just match text — then answers from the expanded
+context.
+
+## Architecture
+
+```
+Question
+   │
+   ▼
+pgvector HNSW (cosine)  ──►  seed nodes (semantic entry points)
+   │
+   ▼
+recursive CTE over edges ──►  k-hop expansion (bounded by max_hops)
+   │
+   ▼
+blended rank (seed_similarity × 0.5^hop) ──►  context ──►  model-serving answer
+```
+
+Everything lives in Lakebase: `nodes` + `edges` relational tables (typed, JSONB
+props) as the graph store, a recursive CTE (`WITH RECURSIVE`) for traversal, and
+pgvector for the semantic seed. A generic Databricks **model-serving** endpoint
+supplies embeddings and answer synthesis — swap in whichever provider your
+workspace has registered.
+
+<Callout type="note" title="What this is (and isn't)">
+Lakebase is managed Postgres — there is no native property-graph engine (no
+Apache AGE, no Cypher). This example builds GraphRAG on relational + vector
+primitives (`vector`, `ltree`, `pg_trgm`). It's great for bounded k-hop
+operational retrieval, not a billion-edge graph-analytics engine.
+</Callout>
+
+## Deploy with Asset Bundles
+
+Prerequisites: a Databricks workspace with **Lakebase (Autoscaling)** enabled, a
+model-serving **embeddings** endpoint and a **chat** endpoint registered, plus
+the `databricks` CLI and `uv`.
+
+```bash
+cd graphrag
+databricks bundle deploy -t dev \
+  --var lakebase_database="projects/<project>/branches/<branch>/databases/<id>"
+databricks bundle run graphrag_build -t dev
+```
+
+The bundle deploys `notebooks/graphrag_build_and_query.py` as a job that
+assembles a small example supply-chain graph, embeds its nodes, writes to
+Lakebase, and queries it. The two Lakebase I/O cells are scaffolding you complete
+(the Postgres connection is workspace-specific); the retrieval logic itself is
+fully validated offline by the smoke test:
+
+```bash
+cd graphrag
+uv run --python 3.11 --with duckdb --with numpy smoketest/graphrag_logic_smoketest.py
+```
+
+## Configuration
+
+| Variable / setting | Purpose |
+|--------------------|---------|
+| `lakebase_database` | Full Lakebase database resource path (required). |
+| `max_hops` | Bounds how far the recursive CTE traverses out from the seed nodes. |
+| Embeddings endpoint | Model-serving endpoint used to embed nodes and questions. |
+| Chat endpoint | Model-serving endpoint used to synthesize the final answer. |
+
+<Callout type="note" title="Source">
+The full example lives in
+[`graphrag/`](https://github.com/databricks-solutions/lakebase-cookbook/tree/main/graphrag).
+</Callout>

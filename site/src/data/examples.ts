@@ -18,6 +18,15 @@ export const EXAMPLES: ExampleCard[] = [
     status: 'ready',
   },
   {
+    tag: 'GraphRAG',
+    title: 'Knowledge-graph RAG on Lakebase',
+    bracket: 'pgvector seed, recursive-CTE graph traversal',
+    description:
+      'Augment RAG with a knowledge graph stored in Lakebase. A pgvector semantic seed finds entry nodes, a recursive CTE traverses relationships out to k hops, and a blended score ranks the expanded context — surfacing connections flat retrieval misses.',
+    href: '/docs/examples/graphrag/',
+    status: 'ready',
+  },
+  {
     tag: 'AI Memory',
     title: 'Durable memory for agents',
     bracket: 'Postgres-backed short- and long-term memory',

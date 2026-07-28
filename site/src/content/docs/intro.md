@@ -20,6 +20,7 @@ for transactional workloads that sit alongside your lakehouse.
 | Example | Description |
 |---------|-------------|
 | [Genie Caching](/docs/examples/genie-caching/) | Genie API gateway with a Lakebase (pgvector) semantic query cache |
+| [GraphRAG](/docs/examples/graphrag/) | Knowledge-graph-augmented RAG with pgvector seeding and recursive-CTE graph traversal |
 | [AI Memory](/docs/examples/ai-memory/) | AI memory patterns backed by Lakebase |
 | [Apps](/docs/examples/apps/) | Sample applications on Lakebase |
 | [Feature Store](/docs/examples/feature-store/) | Feature store integration |
