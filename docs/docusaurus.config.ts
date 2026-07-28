@@ -78,6 +78,8 @@ const config: Config = {
           position: 'left',
           label: 'Examples',
         },
+        {to: '/why-lakebase', label: 'Why Lakebase', position: 'left'},
+        {to: '/archives', label: 'Archives', position: 'left'},
         {to: '/blog', label: 'Blog', position: 'left'},
         {to: '/resources', label: 'Resources', position: 'left'},
         {

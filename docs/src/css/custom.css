@@ -91,20 +91,3 @@
   opacity: 0.8;
 }
 
-.landing-button-vertical {
-  display: none;
-}
-
-@media screen and (max-width: 25rem) {
-  footer {
-    display: none;
-  }
-
-  .landing-button-horizontal {
-    display: none;
-  }
-
-  .landing-button-vertical {
-    display: block;
-  }
-}
