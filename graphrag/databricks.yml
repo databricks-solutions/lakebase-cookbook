@@ -1,0 +1,56 @@
+# Databricks Asset Bundle — GraphRAG on Lakebase
+# Deploy:  databricks bundle deploy -t dev
+# Run:     databricks bundle run graphrag_build -t dev
+#
+# Override the Lakebase database path for your workspace before first deploy:
+#   databricks bundle deploy -t dev --var lakebase_database="projects/<id>/branches/production/databases/<db>"
+
+bundle:
+  name: graphrag_lakebase
+
+variables:
+  catalog:
+    default: main
+  schema:
+    default: graphrag
+  # Databricks model-serving endpoints (generic — any provider registered in your workspace).
+  chat_endpoint:
+    default: databricks-claude-sonnet-4-5
+  embedding_endpoint:
+    default: databricks-gte-large-en
+  # Full Lakebase database resource path (Catalog -> Lakebase -> database id).
+  lakebase_database:
+    default: projects/CHANGE_ME/branches/production/databases/CHANGE_ME
+
+sync:
+  paths:
+    - ./
+
+resources:
+  jobs:
+    graphrag_build:
+      name: graphrag-build-${bundle.target}
+      tasks:
+        - task_key: build_graph
+          notebook_task:
+            notebook_path: ./notebooks/graphrag_build_and_query.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+              chat_endpoint: ${var.chat_endpoint}
+              embedding_endpoint: ${var.embedding_endpoint}
+              lakebase_database: ${var.lakebase_database}
+          environment_key: default
+      environments:
+        - environment_key: default
+          spec:
+            client: "3"
+            dependencies:
+              - psycopg[binary]
+
+targets:
+  dev:
+    default: true
+    mode: development
+    workspace:
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
