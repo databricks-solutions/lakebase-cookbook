@@ -1,10 +1,10 @@
-# Lakebase Cookbook — documentation site (Docusaurus on Cloudflare Workers)
+# Lakebase Cookbook — documentation site (Astro on Cloudflare Workers)
 #
-# The site source lives in docs/. These targets wrap the npm/wrangler workflow.
+# The site source lives in site/. These targets wrap the npm/wrangler workflow.
 # Deploys require a per-machine Cloudflare login (`make login`); no secrets are
 # stored in this repo.
 
-DOCS_DIR := docs
+SITE_DIR := site
 
 .DEFAULT_GOAL := help
 
@@ -15,28 +15,28 @@ help: ## Show available targets
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
 
 install: ## Install site dependencies
-	cd $(DOCS_DIR) && npm install
+	cd $(SITE_DIR) && npm install
 
 dev: ## Run the local dev server with hot reload (http://localhost:3000)
-	cd $(DOCS_DIR) && npm start
+	cd $(SITE_DIR) && npm run dev
 
-build: ## Build the static site into docs/build
-	cd $(DOCS_DIR) && npm run build
+build: ## Build the static site into site/dist
+	cd $(SITE_DIR) && npm run build
 
 serve: build ## Build, then serve the production build locally
-	cd $(DOCS_DIR) && npm run serve
+	cd $(SITE_DIR) && npm run preview
 
 preview: build ## Build, then validate the Cloudflare deploy without publishing (dry run)
-	cd $(DOCS_DIR) && npm run deploy:preview
+	cd $(SITE_DIR) && npm run deploy:preview
 
 deploy: build ## Build and deploy the site to Cloudflare (maintainers only)
-	cd $(DOCS_DIR) && npm run deploy
+	cd $(SITE_DIR) && npm run deploy
 
 login: ## Authenticate this machine with Cloudflare (one-time, interactive)
-	cd $(DOCS_DIR) && npx wrangler login
+	cd $(SITE_DIR) && npx wrangler login
 
 logout: ## Remove the local Cloudflare credentials from this machine
-	cd $(DOCS_DIR) && npx wrangler logout
+	cd $(SITE_DIR) && npx wrangler logout
 
-clean: ## Remove the build output and Docusaurus cache
-	cd $(DOCS_DIR) && npm run clear && rm -rf build
+clean: ## Remove the build output and Astro cache
+	cd $(SITE_DIR) && rm -rf dist .astro
