@@ -1,0 +1,19 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Page not found">
+  <div class="flex min-h-[45vh] flex-col items-start justify-center">
+    <div class="mono-label text-[var(--color-lava-600)]">[ 404 ]</div>
+    <h1 class="mt-4 text-4xl font-light tracking-tight sm:text-6xl">
+      Page not found
+    </h1>
+    <p class="mt-4 max-w-lg text-[var(--color-muted)]">
+      The page you're looking for doesn't exist or has moved.
+    </p>
+    <div class="mt-8 flex gap-3">
+      <a href="/" class="btn btn-primary">Home</a>
+      <a href="/docs/" class="btn btn-ghost">Browse Examples</a>
+    </div>
+  </div>
+</BaseLayout>

@@ -1,0 +1,87 @@
+---
+import BaseLayout from './BaseLayout.astro';
+import DocsSidebar from '../components/DocsSidebar.astro';
+import { getDocs } from '../lib/docs';
+
+interface Props {
+  title: string;
+  description?: string;
+  id: string;
+}
+const { title, description, id } = Astro.props;
+
+// Prev / next navigation across the flat, sorted doc order.
+const docs = await getDocs();
+const idx = docs.findIndex((d) => d.id === id);
+const href = (docId: string) => `/docs/${docId === 'intro' ? '' : docId + '/'}`;
+const prev = idx > 0 ? docs[idx - 1] : null;
+const next = idx >= 0 && idx < docs.length - 1 ? docs[idx + 1] : null;
+const editUrl = `https://github.com/databricks-solutions/lakebase-cookbook/edit/main/site/src/content/docs/${id}.mdx`;
+---
+
+<BaseLayout title={title} description={description} padded={false}>
+  <div class="mx-auto max-w-6xl px-4 sm:px-6">
+    <div class="grid grid-cols-1 gap-10 py-10 lg:grid-cols-[220px_1fr] lg:gap-14">
+      <!-- Sidebar -->
+      <aside class="lg:sticky lg:top-20 lg:self-start">
+        <DocsSidebar />
+      </aside>
+
+      <!-- Article -->
+      <article class="min-w-0">
+        <div class="prose-doc">
+          <slot />
+        </div>
+
+        <!-- Edit link -->
+        <div class="mt-12 border-t border-[var(--color-line)] pt-6">
+          <a
+            href={editUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="mono-label text-[0.7rem] text-[var(--color-muted)] hover:text-[var(--color-lava-600)]"
+            >Edit this page →</a
+          >
+        </div>
+
+        <!-- Prev / next -->
+        <nav class="mt-6 flex flex-col gap-4 sm:flex-row sm:justify-between">
+          {
+            prev ? (
+              <a
+                href={href(prev.id)}
+                class="flex-1 border border-[var(--color-line)] p-4 transition-colors hover:border-[var(--color-lava-600)]"
+              >
+                <div class="mono-label text-[0.65rem] text-[var(--color-muted)]">
+                  ← Previous
+                </div>
+                <div class="mt-1 text-sm font-semibold text-[var(--color-ink)]">
+                  {prev.data.sidebar_label ?? prev.data.title}
+                </div>
+              </a>
+            ) : (
+              <span class="flex-1" />
+            )
+          }
+          {
+            next ? (
+              <a
+                href={href(next.id)}
+                class="flex-1 border border-[var(--color-line)] p-4 text-right transition-colors hover:border-[var(--color-lava-600)]"
+              >
+                <div class="mono-label text-[0.65rem] text-[var(--color-muted)]">
+                  Next →
+                </div>
+                <div class="mt-1 text-sm font-semibold text-[var(--color-ink)]">
+                  {next.data.sidebar_label ?? next.data.title}
+                </div>
+              </a>
+            ) : (
+              <span class="flex-1" />
+            )
+          }
+        </nav>
+      </article>
+    </div>
+  </div>
+</BaseLayout>

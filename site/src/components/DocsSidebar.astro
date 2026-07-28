@@ -1,0 +1,41 @@
+---
+import { getSidebar } from '../lib/docs';
+const sidebar = await getSidebar();
+const current = Astro.url.pathname;
+const norm = (p: string) => (p.endsWith('/') ? p : p + '/');
+---
+
+<nav aria-label="Docs" class="flex flex-col gap-6">
+  {
+    sidebar.map((group) => (
+      <div>
+        {group.label && (
+          <div class="mono-label mb-2 text-[0.7rem] text-[var(--color-muted)]">
+            {group.label}
+          </div>
+        )}
+        <ul class="flex flex-col gap-0.5">
+          {group.items.map((item) => {
+            const active = norm(current) === norm(item.href);
+            return (
+              <li>
+                <a
+                  href={item.href}
+                  aria-current={active ? 'page' : undefined}
+                  class:list={[
+                    'block border-l-2 py-1.5 pl-3 text-sm transition-colors',
+                    active
+                      ? 'border-[var(--color-lava-600)] font-semibold text-[var(--color-lava-600)]'
+                      : 'border-[var(--color-line)] text-[var(--color-muted)] hover:border-[var(--color-ink)] hover:text-[var(--color-ink)]',
+                  ]}
+                >
+                  {item.label}
+                </a>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    ))
+  }
+</nav>

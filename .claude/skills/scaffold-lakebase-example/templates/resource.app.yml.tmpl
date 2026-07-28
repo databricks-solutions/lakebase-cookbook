@@ -1,0 +1,34 @@
+# Databricks App resource for the "__TITLE__" example.
+# Paths are relative to the bundle root (`..` exits the resources/ folder).
+#
+# For a Job, Pipeline, or Dashboard example instead of an App, replace the
+# `apps:` block with the matching DAB resource type — consult the
+# `databricks-dabs` skill or the Databricks docs for the exact schema.
+resources:
+  apps:
+    __NAME__:
+      name: ${var.app_name}
+      description: "__DESCRIPTION__"
+      # Bundle sync uploads the repo tree; the app resolves app.yml/command from it.
+      source_code_path: ../
+      # Keep this small per CONTRIBUTING.md. Bump only if the example truly needs it.
+      compute_size: SMALL
+      user_api_scopes:
+        - sql
+        # add scopes the example needs, e.g. dashboards.genie, serving.serving-endpoints
+
+      resources:
+        - name: postgres
+          postgres:
+            branch: ${var.lakebase_branch}
+            database: ${var.lakebase_database}
+            permission: CAN_CONNECT_AND_CREATE
+
+      config:
+        env:
+          - name: LAKEBASE_INSTANCE
+            value: ${var.lakebase_branch}
+          - name: LAKEBASE_CATALOG
+            value: ${var.lakebase_catalog}
+          - name: LAKEBASE_SCHEMA
+            value: ${var.lakebase_schema}

@@ -1,0 +1,57 @@
+# __TITLE__
+
+__DESCRIPTION__
+
+> One paragraph: what this example does, which Lakebase capability it
+> demonstrates, and when you'd reach for it.
+
+## Features
+
+| Area | What you get |
+|------|--------------|
+| ... | ... |
+
+## Architecture
+
+```
+(ASCII diagram of the data flow — who calls what, and where Lakebase sits)
+```
+
+Explain in a sentence or two how the pieces connect and who talks to Lakebase.
+
+## Deploy with Asset Bundles
+
+Prerequisites:
+
+- Databricks workspace with <Apps / Genie space / SQL warehouse / ...> as needed
+- A **Lakebase** project/branch/database (with any required extension, e.g. pgvector)
+- [Databricks CLI](https://docs.databricks.com/dev-tools/cli/install.html) logged
+  into the target workspace
+
+Steps:
+
+1. **Set variables** — override any workspace-specific value, especially the
+   Lakebase database path:
+
+   ```bash
+   databricks bundle deploy -t demo \
+     --var lakebase_database="projects/<project>/branches/<branch>/databases/<id>"
+   ```
+
+2. **(Any once-per-workspace setup)** — e.g. granting the app service principal
+   access to the Lakebase project, creating a Postgres role, etc.
+
+3. **Run / open** the deployed resource and confirm it works.
+
+## Configuration
+
+| Variable / setting | Purpose |
+|--------------------|---------|
+| `lakebase_database` | Full Lakebase database resource path (required). |
+| `lakebase_catalog` / `lakebase_schema` | Where the example's tables live. |
+| ... | ... |
+
+## Local development
+
+(If applicable — how to run the example off-platform, using `.env` from
+`.env.example`. Never commit a real `.env`.)

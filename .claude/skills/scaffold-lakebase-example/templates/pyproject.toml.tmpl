@@ -1,0 +1,27 @@
+# Managed with uv (https://docs.astral.sh/uv/). Lint/format with ruff.
+#   uv sync                 # install deps into .venv
+#   uv run ruff check .     # lint
+#   uv run ruff format .    # format
+[project]
+name = "__NAME__"
+version = "0.1.0"
+description = "__DESCRIPTION__"
+requires-python = ">=3.11"
+dependencies = [
+  # Add runtime dependencies here, e.g.:
+  # "databricks-sdk",
+  # "psycopg[binary]",
+]
+
+[dependency-groups]
+dev = [
+  "ruff",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+# A sensible default set; extend as needed.
+select = ["E", "F", "I", "UP", "B"]

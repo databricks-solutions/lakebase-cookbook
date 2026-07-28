@@ -1,0 +1,50 @@
+---
+import '../styles/global.css';
+import Navbar from '../components/Navbar.astro';
+import Footer from '../components/Footer.astro';
+import { SITE } from '../config';
+
+interface Props {
+  title?: string;
+  description?: string;
+  /** Set false on the landing page so the hero can go full-bleed. */
+  padded?: boolean;
+}
+
+const { title, description = SITE.tagline, padded = true } = Astro.props;
+const pageTitle = title ? `${title} · ${SITE.title}` : SITE.title;
+const canonical = new URL(Astro.url.pathname, SITE.url).href;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/png" href="/img/lakebase-icon.png" />
+    <link rel="canonical" href={canonical} />
+    <title>{pageTitle}</title>
+    <meta name="description" content={description} />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonical} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="generator" content={Astro.generator} />
+  </head>
+  <body class="flex min-h-screen flex-col">
+    <Navbar />
+    <main class="flex-1">
+      {
+        padded ? (
+          <div class="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
+            <slot />
+          </div>
+        ) : (
+          <slot />
+        )
+      }
+    </main>
+    <Footer />
+  </body>
+</html>
