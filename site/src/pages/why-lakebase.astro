@@ -1,0 +1,55 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import FeatureScroller from '../components/FeatureScroller.tsx';
+---
+
+<BaseLayout
+  title="Why Lakebase"
+  description="Why Lakebase: a fully managed, Postgres-compatible operational database built into the lakehouse to lower the total cost of database ownership."
+>
+  <!-- Hero -->
+  <div class="mx-auto mb-16 max-w-3xl">
+    <span class="tag-chip">Why Lakebase</span>
+    <h1 class="mt-5 text-4xl font-light tracking-tight sm:text-6xl">
+      A database built <span class="text-[var(--color-lava-600)]">into</span> the
+      lakehouse.
+    </h1>
+    <p class="mt-6 text-lg leading-relaxed text-[var(--color-muted)]">
+      Lakebase is a fully managed, PostgreSQL-compatible operational database
+      built directly into the lakehouse. It brings transactional workloads and
+      analytical data together on one governed platform, reducing the complexity
+      and cost of running a separate operational database. Scroll to explore what
+      sets it apart.
+    </p>
+  </div>
+
+  <!-- Scrollytelling feature section -->
+  <FeatureScroller client:visible />
+
+  <!-- TCO highlight band -->
+  <div class="mt-16 border-l-4 border-[var(--color-lava-600)] bg-[var(--color-ink)] p-8 text-white sm:p-10">
+    <h2 class="mb-3 text-2xl font-light tracking-tight text-white sm:text-3xl">
+      Lowering the total cost of database ownership
+    </h2>
+    <p class="max-w-4xl text-base leading-relaxed text-gray-200 sm:text-lg">
+      Traditional operational databases require dedicated infrastructure,
+      always-on capacity, and pipelines to move data into the analytics platform.
+      Lakebase replaces that with a fully managed service that scales to zero,
+      charges only for what you use, and keeps operational and analytical data on
+      a single governed copy — so teams spend less on infrastructure, data
+      movement, and operational overhead.
+    </p>
+  </div>
+
+  <!-- CTA -->
+  <div class="mt-12 flex flex-col gap-3 sm:flex-row">
+    <a href="/docs/" class="btn btn-primary">Browse Examples</a>
+    <a href="/docs/" class="btn btn-ghost">Read the docs</a>
+    <a
+      href="https://www.databricks.com/product/lakebase"
+      target="_blank"
+      rel="noopener noreferrer"
+      class="btn btn-ghost">Lakebase product page</a
+    >
+  </div>
+</BaseLayout>

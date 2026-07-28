@@ -1,0 +1,126 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Button from '../components/Button.astro';
+import HeaderAnimation from '../components/HeaderAnimation.tsx';
+import { EXAMPLES } from '../data/examples';
+import { SITE } from '../config';
+
+const pad = (n: number) => String(n).padStart(2, '0');
+---
+
+<BaseLayout padded={false}>
+  <!-- ============================ HERO ============================ -->
+  <header class="relative overflow-hidden border-b border-[var(--color-line)]">
+    <!-- Wave animation, faded so it reads as texture behind the type -->
+    <div class="pointer-events-none absolute inset-0 opacity-[0.18]">
+      <HeaderAnimation client:only="react" />
+    </div>
+
+    <div
+      class="relative z-10 mx-auto flex min-h-[68vh] max-w-6xl flex-col justify-center px-4 py-20 sm:px-6 sm:py-28"
+    >
+      <div class="mono-label mb-6 text-[var(--color-lava-600)]">
+        [ Lakebase Cookbook ]
+      </div>
+      <h1
+        class="max-w-4xl text-[2.75rem] font-light leading-[1.02] tracking-tight text-[var(--color-ink)] sm:text-6xl md:text-7xl"
+      >
+        Build on <span class="text-[var(--color-lava-600)]">Lakebase</span>,
+        <br class="hidden sm:block" />not on plumbing.
+      </h1>
+      <p
+        class="mt-6 max-w-2xl text-lg leading-relaxed text-[var(--color-muted)] sm:text-xl"
+      >
+        {SITE.tagline}. Postgres you already know, colocated with your lakehouse —
+        <span class="bracket">branching, autoscaling, scale-to-zero</span>.
+      </p>
+
+      <div class="mt-9 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+        <Button href="/docs/">Browse Examples</Button>
+        <Button href="/archives/">Archives</Button>
+        <Button href="/why-lakebase/" variant="ghost">Why Lakebase</Button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ========================= EXAMPLES ========================= -->
+  <section class="mx-auto max-w-6xl px-4 py-20 sm:px-6 sm:py-28">
+    <div class="mb-14 flex flex-col gap-4">
+      <span class="tag-chip self-start">Examples</span>
+      <h2 class="max-w-2xl text-3xl font-light tracking-tight sm:text-5xl">
+        Patterns you can deploy today.
+      </h2>
+    </div>
+
+    <div class="flex flex-col">
+      {
+        EXAMPLES.map((ex, i) => (
+          <a
+            href={ex.href}
+            class="group grid grid-cols-1 gap-4 border-t border-[var(--color-line)] py-9 transition-colors last:border-b hover:bg-[var(--color-band)] md:grid-cols-[auto_1fr_auto] md:items-baseline md:gap-10"
+          >
+            <div class="mono-label text-[var(--color-muted)] md:pt-1">
+              {pad(i + 1)}
+            </div>
+            <div>
+              <div class="mb-2 flex items-center gap-3">
+                <span class="tag-chip">{ex.tag}</span>
+                {ex.status === 'soon' && (
+                  <span class="mono-label text-[0.65rem] text-[var(--color-muted)]">
+                    Coming soon
+                  </span>
+                )}
+              </div>
+              <h3 class="text-2xl font-light tracking-tight text-[var(--color-ink)] sm:text-3xl">
+                {ex.title}
+              </h3>
+              <p class="mt-1 mono-label text-[0.7rem] font-normal normal-case tracking-normal text-[var(--color-muted)]">
+                <span class="bracket">{ex.bracket}</span>
+              </p>
+              <p class="mt-3 max-w-2xl text-[var(--color-muted)]">
+                {ex.description}
+              </p>
+            </div>
+            <div class="mono-label whitespace-nowrap text-[var(--color-lava-600)] opacity-0 transition-opacity group-hover:opacity-100 md:pt-1">
+              Read →
+            </div>
+          </a>
+        ))
+      }
+    </div>
+  </section>
+
+  <!-- ===================== POSTER CTA MOMENT ===================== -->
+  <section class="bg-[var(--color-ink)] text-white">
+    <div class="mx-auto max-w-6xl px-4 py-24 sm:px-6 sm:py-32">
+      <span
+        class="mono-label border border-[var(--color-lava-500)] px-2 py-1 text-[0.65rem] text-[var(--color-lava-500)]"
+        >Databricks Lakebase</span
+      >
+      <h2
+        class="mt-8 max-w-4xl text-4xl font-light leading-[1.05] tracking-tight text-white sm:text-6xl md:text-7xl"
+      >
+        Operational and analytical,
+        <span class="text-[var(--color-lava-500)]">one governed copy.</span>
+      </h2>
+      <p class="mt-6 max-w-2xl text-lg leading-relaxed text-gray-300">
+        Stop replicating data between an operational database and your
+        lakehouse. Lakebase brings a fully-managed Postgres engine directly
+        into the platform — so the same governed data powers your apps, agents,
+        and analytics.
+      </p>
+      <div class="mt-9 flex flex-col gap-3 sm:flex-row">
+        <a
+          href="/why-lakebase/"
+          class="btn border-2 border-[var(--color-lava-500)] bg-[var(--color-lava-500)] text-[var(--color-ink)] hover:border-white hover:bg-white"
+          >Why Lakebase</a
+        >
+        <a
+          href="/docs/"
+          class="btn border-2 border-white bg-transparent text-white hover:bg-white hover:text-[var(--color-ink)]"
+          >Read the docs</a
+        >
+      </div>
+    </div>
+  </section>
+</BaseLayout>

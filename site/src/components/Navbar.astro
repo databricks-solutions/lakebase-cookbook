@@ -1,0 +1,73 @@
+---
+import { NAV, SITE } from '../config';
+const path = Astro.url.pathname;
+const isActive = (href: string) =>
+  href === '/docs/' ? path.startsWith('/docs') : path === href;
+---
+
+<header
+  class="sticky top-0 z-50 border-b border-[var(--color-line)] bg-[var(--color-canvas)]/90 backdrop-blur"
+>
+  <nav class="mx-auto flex h-14 max-w-6xl items-center gap-6 px-4 sm:px-6">
+    <a href="/" class="flex items-center gap-2.5">
+      <img src="/img/lakebase-icon.png" alt="" width="24" height="24" />
+      <span class="mono-label !text-[0.9rem] tracking-tight text-[var(--color-ink)]"
+        >{SITE.title}</span
+      >
+    </a>
+
+    <div class="ml-auto hidden items-center gap-1 md:flex">
+      {
+        NAV.map((item) => (
+          <a
+            href={item.href}
+            class:list={[
+              'mono-label px-3 py-2 transition-colors',
+              isActive(item.href)
+                ? 'text-[var(--color-lava-600)]'
+                : 'text-[var(--color-muted)] hover:text-[var(--color-ink)]',
+            ]}
+          >
+            {item.label}
+          </a>
+        ))
+      }
+      <a
+        href={SITE.github}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="mono-label ml-2 border border-[var(--color-ink)] px-3 py-1.5 text-[var(--color-ink)] transition-colors hover:bg-[var(--color-ink)] hover:text-white"
+        >GitHub</a
+      >
+    </div>
+
+    <!-- Mobile: details/summary disclosure, no JS needed -->
+    <details class="relative ml-auto md:hidden">
+      <summary
+        class="mono-label flex cursor-pointer list-none items-center gap-1 text-[var(--color-ink)] [&::-webkit-details-marker]:hidden"
+        >Menu</summary
+      >
+      <div
+        class="absolute right-0 top-full mt-2 flex w-52 flex-col border border-[var(--color-line)] bg-[var(--color-canvas)] shadow-lg"
+      >
+        {
+          NAV.map((item) => (
+            <a
+              href={item.href}
+              class="mono-label border-b border-[var(--color-line)] px-4 py-3 text-[var(--color-ink)] hover:bg-[var(--color-band)]"
+            >
+              {item.label}
+            </a>
+          ))
+        }
+        <a
+          href={SITE.github}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="mono-label px-4 py-3 text-[var(--color-ink)] hover:bg-[var(--color-band)]"
+          >GitHub</a
+        >
+      </div>
+    </details>
+  </nav>
+</header>

@@ -1,0 +1,295 @@
+/* ============================================================
+   Lakebase Cookbook — design system
+   Light editorial canvas, adapted from developers.databricks.com:
+   oversized light-weight DM Sans display, Inter body, Geist Mono
+   labels, lava-coral accent, zero radius, bracket + tag + zebra
+   devices.
+   ============================================================ */
+
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300..700&family=Inter:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap");
+
+@import "tailwindcss";
+
+@theme {
+  /* Brand palette — lava reds tuned for a light canvas */
+  --color-lava-800: #a81a0a;
+  --color-lava-700: #c81f0d;
+  --color-lava-600: #ff3621; /* primary accent (classic lava) */
+  --color-lava-500: #ff7364;
+
+  /* Neutrals */
+  --color-ink: #1b3139;      /* Databricks deep navy — primary text */
+  --color-ink-soft: #2e4a56;
+  --color-muted: #5b6770;    /* secondary text */
+  --color-canvas: #ffffff;   /* page background */
+  --color-band: #f9f7f4;     /* oat — zebra bands / cards */
+  --color-line: #e4e0d9;     /* hairline borders */
+
+  /* Fonts */
+  --font-display: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Square corners everywhere */
+  --radius: 0px;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.6;
+  }
+
+  /* Display headings: DM Sans, light weight, tight tracking. */
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    color: var(--color-ink);
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+    font-weight: 500;
+  }
+
+  a {
+    color: inherit;
+  }
+
+  ::selection {
+    background: var(--color-lava-600);
+    color: #fff;
+  }
+}
+
+@layer components {
+  /* Small uppercase mono label — nav items, eyebrows, meta. */
+  .mono-label {
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 0.8125rem;
+    font-weight: 500;
+  }
+
+  /* Coral section tag chip — sits above a section heading. */
+  .tag-chip {
+    display: inline-block;
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    color: var(--color-lava-600);
+    border: 1px solid var(--color-lava-600);
+    padding: 0.25rem 0.6rem;
+  }
+
+  /* Bracketed mono aside — the [like this] motif. */
+  .bracket {
+    font-family: var(--font-mono);
+    color: var(--color-muted);
+  }
+  .bracket::before {
+    content: "[";
+    color: var(--color-lava-600);
+  }
+  .bracket::after {
+    content: "]";
+    color: var(--color-lava-600);
+  }
+
+  /* Buttons — square, mono, uppercase. */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    font-size: 0.875rem;
+    font-weight: 500;
+    padding: 0.75rem 1.5rem;
+    border: 2px solid transparent;
+    transition:
+      background-color 0.15s ease,
+      border-color 0.15s ease,
+      color 0.15s ease;
+    cursor: pointer;
+  }
+
+  .btn-primary {
+    background: var(--color-lava-600);
+    color: #fff;
+    border-color: var(--color-lava-600);
+  }
+  .btn-primary:hover {
+    background: var(--color-lava-700);
+    border-color: var(--color-lava-700);
+  }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--color-ink);
+    border-color: var(--color-ink);
+  }
+  .btn-ghost:hover {
+    background: var(--color-ink);
+    color: #fff;
+  }
+
+  /* ----------------------------------------------------------
+     Rendered Markdown / MDX article body.
+     ---------------------------------------------------------- */
+  .prose-doc {
+    color: var(--color-ink);
+    font-size: 1rem;
+    line-height: 1.7;
+  }
+  .prose-doc > :first-child {
+    margin-top: 0;
+  }
+  .prose-doc h1 {
+    font-size: clamp(2rem, 4vw, 2.75rem);
+    font-weight: 500;
+    margin: 0 0 1.25rem;
+  }
+  .prose-doc h2 {
+    font-size: 1.6rem;
+    font-weight: 500;
+    margin: 2.5rem 0 1rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--color-line);
+  }
+  .prose-doc h3 {
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin: 2rem 0 0.75rem;
+  }
+  .prose-doc p {
+    margin: 0 0 1.1rem;
+  }
+  .prose-doc a {
+    color: var(--color-lava-600);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    text-decoration-thickness: 1px;
+  }
+  .prose-doc a:hover {
+    color: var(--color-lava-700);
+  }
+  .prose-doc ul,
+  .prose-doc ol {
+    margin: 0 0 1.1rem;
+    padding-left: 1.4rem;
+  }
+  .prose-doc ul {
+    list-style: none;
+  }
+  .prose-doc ul > li {
+    position: relative;
+  }
+  .prose-doc ul > li::before {
+    content: "";
+    position: absolute;
+    left: -1.1rem;
+    top: 0.65em;
+    width: 6px;
+    height: 6px;
+    background: var(--color-lava-600);
+  }
+  .prose-doc ol {
+    list-style: decimal;
+  }
+  .prose-doc li {
+    margin: 0.35rem 0;
+  }
+  .prose-doc strong {
+    font-weight: 600;
+    color: var(--color-ink);
+  }
+  /* Inline code */
+  .prose-doc :not(pre) > code {
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    background: var(--color-band);
+    border: 1px solid var(--color-line);
+    padding: 0.1rem 0.35rem;
+  }
+  /* Code blocks (Shiki) */
+  .prose-doc pre {
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    line-height: 1.6;
+    border: 1px solid var(--color-line);
+    padding: 1rem 1.25rem;
+    overflow-x: auto;
+    margin: 0 0 1.5rem;
+  }
+  .prose-doc pre code {
+    font-family: inherit;
+  }
+  /* Tables */
+  .prose-doc table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+    margin: 0 0 1.5rem;
+  }
+  .prose-doc th,
+  .prose-doc td {
+    border: 1px solid var(--color-line);
+    padding: 0.6rem 0.85rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  .prose-doc th {
+    background: var(--color-band);
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    font-size: 0.7rem;
+    font-weight: 500;
+  }
+  .prose-doc blockquote {
+    border-left: 4px solid var(--color-lava-600);
+    padding-left: 1rem;
+    margin: 0 0 1.25rem;
+    color: var(--color-muted);
+  }
+  .prose-doc hr {
+    border: none;
+    border-top: 1px solid var(--color-line);
+    margin: 2rem 0;
+  }
+  .prose-doc img {
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* Hairline link with coral underline on hover. */
+  .link-underline {
+    color: var(--color-lava-600);
+    text-decoration: none;
+    background-image: linear-gradient(
+      var(--color-lava-600),
+      var(--color-lava-600)
+    );
+    background-size: 0% 1px;
+    background-repeat: no-repeat;
+    background-position: 0 100%;
+    transition: background-size 0.2s ease;
+  }
+  .link-underline:hover {
+    background-size: 100% 1px;
+  }
+}
