@@ -45,13 +45,13 @@ export const EXAMPLES: ExampleCard[] = [
     status: 'soon',
   },
   {
-    tag: 'Apps',
-    title: 'Full-stack apps on Lakebase',
-    bracket: 'low-latency reads, transactional writes',
+    tag: 'FastAPI App',
+    title: 'FastAPI backend on Lakebase',
+    bracket: 'Databricks App, OAuth rotation, scale-to-zero pooling',
     description:
-      'Build interactive applications that read and write operational data with single-digit-millisecond latency, colocated with your lakehouse.',
-    href: '/docs/examples/apps/',
-    status: 'soon',
+      'A Databricks App that serves a Lakebase synced table through a FastAPI REST API — with automatic OAuth token rotation, a scale-to-zero-aware connection pool, and fully bundle-driven provisioning of the project, endpoint, catalog, and synced table.',
+    href: '/docs/examples/lakebase-fastapi/',
+    status: 'ready',
   },
   {
     tag: 'Feature Store',

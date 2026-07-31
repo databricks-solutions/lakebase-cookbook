@@ -1,0 +1,27 @@
+[project]
+name = "lakebase-fastapi-app"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    # Web framework + server
+    "fastapi>=0.100.0",
+    "uvicorn>=0.23.0",
+    # Data models / validation
+    "pydantic>=2.1.0",
+    "pydantic-settings>=2.0.0",
+    "sqlmodel==0.0.24",
+    "sqlalchemy[asyncio]==2.0.41",  # [asyncio] pulls greenlet, required for async
+    # Postgres driver (psycopg3, binary wheel)
+    "psycopg[binary]>=3.2",
+    # Databricks SDK (Lakebase project/branch/endpoint/credential APIs)
+    "databricks-sdk>=0.61.0",
+    # HTTP + utilities used directly in the app
+    "httpx>=0.24.1",
+    "requests==2.32.4",
+    "python-dotenv==1.1.0",
+    # NOTE: removed uuid/asyncio (PyPI shims that shadow the stdlib),
+    # databricks-sql-connector + pandas (unused; app talks Postgres, not DBSQL),
+    # and google-auth/rsa/pyasn1* (transitive deps of databricks-sdk).
+]
