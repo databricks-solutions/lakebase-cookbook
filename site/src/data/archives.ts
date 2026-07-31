@@ -48,6 +48,15 @@ export const ARCHIVE: ArchiveEntry[] = [
       'A customer session on how Mastercard standardizes on Lakebase as the operational database powering its agentic workloads, unifying transactional apps and analytics on one governed platform.',
   },
   {
+    title: 'Announcing Lakebase Search: agent-native retrieval built into Lakebase Postgres',
+    mediaType: 'Blog',
+    source: 'Databricks Blog',
+    date: 'Jun 2026',
+    url: 'https://www.databricks.com/blog/announcing-lakebase-search-agent-native-retrieval-built-lakebase-postgres',
+    summary:
+      'Introduces Lakebase Search — hybrid vector and full-text retrieval built into Lakebase Postgres via the native lakebase_vector and lakebase_text extensions — so agents can retrieve context, reason, act, and remember on a single Postgres backend without a separate vector database.',
+  },
+  {
     title: 'AI Agents That Remember: Building Stateful Systems with Lakebase',
     mediaType: 'Video',
     source: 'YouTube',
