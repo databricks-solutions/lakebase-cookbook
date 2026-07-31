@@ -1,0 +1,119 @@
+---
+title: FastAPI backend on Lakebase
+sidebar_label: FastAPI App
+sidebar_position: 30
+description: A Databricks App that serves a Lakebase synced table through a FastAPI REST API, with OAuth token rotation and scale-to-zero-aware connection pooling.
+---
+import Callout from '../../../components/Callout.astro';
+
+# FastAPI backend on Lakebase
+
+A **Databricks App** that serves data from a **Lakebase (autoscaling Postgres)**
+synced table through a **FastAPI** REST API. It shows the production patterns you
+need to put an API in front of Lakebase: OAuth-based connectivity with automatic
+token rotation, a connection pool tuned for scale-to-zero, and fully
+bundle-driven provisioning — one `databricks bundle deploy` creates the project,
+branch, endpoint, catalog, and synced table, deploys the app, and grants the
+app's service principal least-privilege access.
+
+## Why an API in front of Lakebase?
+
+An API layer gives you controlled, authenticated access instead of direct
+database connections: standardized access patterns across teams, connection
+pooling and caching for performance, audit trails, and the freedom to change the
+underlying storage without breaking callers. Any language that speaks REST can
+consume it.
+
+## Architecture
+
+```
+Client ──HTTP──▶ Databricks App (FastAPI, async)
+                      │
+                      │  psycopg3 async + OAuth token as password
+                      ▼
+                 Lakebase endpoint (autoscaling Postgres)
+                      │
+                      ▼
+                 public.orders_synced  ◀── synced from samples.tpch.orders (UC)
+```
+
+- **psycopg3 async** engine connects to the autoscaling endpoint host, using a
+  Lakebase OAuth credential as the Postgres password.
+- **Token rotation** — Lakebase OAuth credentials last ~60 minutes; a background
+  task refreshes proactively at ~45 minutes with retry/backoff, and a connect-time
+  hook injects the current token and refreshes synchronously if it's near expiry.
+- **Scale-to-zero-aware pool** — `pool_pre_ping` validates connections on
+  checkout (the endpoint suspends when idle), LIFO reuse keeps hot connections,
+  and recycling ages out the rest below the token lifetime.
+- **Static API surface** — data endpoints are always registered and return `503`
+  until the database engine is initialized (no restart needed).
+
+## Deploy with Asset Bundles
+
+Prerequisites: a Databricks workspace with permission to create **Lakebase
+projects** and **Apps**, the **Databricks CLI** (authenticated), and **Python
+3.11+** with **uv** for local development.
+
+Set the three bundle variables for your workspace and deploy:
+
+```bash
+databricks bundle deploy -t dev \
+  --var="project_name=my-lakebase-app" \
+  --var="pipeline_storage_catalog=my_catalog" \
+  --var="pipeline_storage_schema=my_schema"
+```
+
+This provisions the Lakebase project / branch / endpoint / catalog / synced
+table, deploys the app, and runs a post-deploy hook
+(`scripts/grant_app_access.py`) that grants the app's service principal
+least-privilege `USAGE` + `SELECT` on the synced table — so there's no manual
+permission step. Open `<your_app_url>/docs` for the interactive API; the
+`/api/v1` endpoints return `503` until the first sync provisions the table.
+
+## Configuration
+
+| Variable | Purpose |
+|----------|---------|
+| `project_name` | Lakebase project id (and display name) — the one place the name lives |
+| `pipeline_storage_catalog` / `pipeline_storage_schema` | Writable UC catalog/schema for the sync pipeline's checkpoints |
+| `source_table` | UC source table to sync (default `samples.tpch.orders`) |
+| `ENDPOINT_NAME` | Local-dev only: the endpoint resource path the app derives host/user/database from |
+| `DB_POOL_SIZE`, `DB_POOL_RECYCLE_INTERVAL`, … | Optional connection-pool tuning |
+
+When deployed, the app's database binding auto-injects
+`PGHOST`/`PGPORT`/`PGDATABASE`/`PGUSER`/`PGSSLMODE`, so no project or database
+names live in `app.yaml`.
+
+## API endpoints
+
+The API is read-only over the synced table:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Liveness check (no DB dependency) |
+| `/api/v1/count` | GET | Total order count |
+| `/api/v1/sample` | GET | 5 random order keys |
+| `/api/v1/pages` | GET | Page-based pagination |
+| `/api/v1/stream` | GET | Cursor-based pagination (high performance) |
+| `/api/v1/{order_key}` | GET | Get an order by key |
+
+### Page-based vs. cursor-based pagination
+
+The example ships both so you can see the tradeoff:
+
+| | `/pages` (page-based) | `/stream` (cursor-based) |
+|---|---|---|
+| **How** | `OFFSET (page-1)*size LIMIT size` | `WHERE key > cursor ORDER BY key LIMIT size` |
+| **Cost** | Grows with page number — the database still scans and discards every skipped row, so deep pages get slow (O(offset)) | Flat — each request seeks straight to the cursor key (O(page)) |
+| **Random access** | Yes — jump to any page number, show total pages | No — you can only walk forward/back from a cursor |
+| **Stable under writes** | No — inserts/deletes shift offsets, causing skipped or repeated rows | Yes — the key anchors the position, so concurrent writes don't duplicate rows |
+
+**Rule of thumb:** use **page-based** for small-to-medium datasets and UIs that
+need page numbers or "jump to page N." Use **cursor-based** for large tables,
+infinite scroll, and real-time feeds — anywhere you scan deep or the data changes
+under you. When in doubt at scale, prefer the cursor.
+
+<Callout type="note" title="Source">
+The full example lives in
+[`apps/lakebase-fastapi/`](https://github.com/databricks-solutions/lakebase-cookbook/tree/main/apps/lakebase-fastapi).
+</Callout>

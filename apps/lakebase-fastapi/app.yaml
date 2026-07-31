@@ -1,0 +1,23 @@
+command:
+  - uvicorn
+  - src.app:app
+  - --host
+  - "0.0.0.0"
+  - --workers
+  - "2"
+
+env:
+  # No project/db names here. The Lakebase DB resource binding (databricks.yml)
+  # auto-injects PGHOST/PGPORT/PGDATABASE/PGUSER/PGSSLMODE, and ENDPOINT_NAME is
+  # injected via databricks.yml config.env (the app also self-derives it from its
+  # binding as a fallback). Only stable connection-pool tuning lives here:
+  - name: 'DB_POOL_SIZE'
+    value: '5'
+  - name: 'DB_MAX_OVERFLOW'
+    value: '10'
+  - name: 'DB_COMMAND_TIMEOUT'
+    value: '30'
+  - name: 'DB_POOL_TIMEOUT'
+    value: '10'
+  - name: 'DB_POOL_RECYCLE_INTERVAL'
+    value: '2700'
