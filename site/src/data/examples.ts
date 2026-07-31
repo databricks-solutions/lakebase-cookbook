@@ -27,6 +27,15 @@ export const EXAMPLES: ExampleCard[] = [
     status: 'ready',
   },
   {
+    tag: 'Branching CI/CD',
+    title: 'Ship schema changes with confidence',
+    bracket: 'branch-per-PR, AI impact review, exactly-once deploy',
+    description:
+      'A GitHub CI/CD workflow that forks a Lakebase branch off production for every PR touching migrations, runs the changed SQL there, and posts an AI impact review before merge — then applies migrations to production exactly once.',
+    href: '/docs/examples/branching-cicd/',
+    status: 'ready',
+  },
+  {
     tag: 'AI Memory',
     title: 'Durable memory for agents',
     bracket: 'Postgres-backed short- and long-term memory',

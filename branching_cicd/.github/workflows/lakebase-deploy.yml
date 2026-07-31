@@ -1,0 +1,42 @@
+name: Lakebase Deploy to Production
+
+# When a validated migration merges to main, apply pending migrations to the
+# PRODUCTION Lakebase branch. The schema_migrations table makes this exactly-
+# once: files already applied (e.g. by `databricks bundle deploy`'s postdeploy
+# hook on a fresh environment) are skipped.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'migrations/**/*.sql'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lakebase-production-migrations
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+      LAKEBASE_PROJECT: ${{ secrets.LAKEBASE_PROJECT }}
+      LAKEBASE_SOURCE_BRANCH: ${{ secrets.LAKEBASE_SOURCE_BRANCH }}
+      LAKEBASE_DATABASE: ${{ secrets.LAKEBASE_DATABASE }}
+      LAKEBASE_PG_USER: ${{ secrets.LAKEBASE_PG_USER }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: pip install -r .github/scripts/requirements.txt
+
+      - name: Apply pending migrations to production
+        run: python .github/scripts/apply_production_migrations.py

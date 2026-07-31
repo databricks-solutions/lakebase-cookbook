@@ -1,0 +1,90 @@
+name: Lakebase PR Validate
+
+# On every PR that touches migrations/, fork a short-lived Lakebase branch off
+# production, execute the changed SQL there, have AI Gateway analyze the
+# change + execution results, and post the report as a PR comment. The branch
+# is deleted when the PR closes.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    branches: [main]
+    paths:
+      - 'migrations/**/*.sql'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+      LAKEBASE_PROJECT: ${{ secrets.LAKEBASE_PROJECT }}
+      LAKEBASE_SOURCE_BRANCH: ${{ secrets.LAKEBASE_SOURCE_BRANCH }}
+      LAKEBASE_DATABASE: ${{ secrets.LAKEBASE_DATABASE }}
+      LAKEBASE_PG_USER: ${{ secrets.LAKEBASE_PG_USER }}
+      AI_GATEWAY_MODEL: ${{ secrets.AI_GATEWAY_MODEL }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      PR_TITLE: ${{ github.event.pull_request.title }}
+      PR_BODY: ${{ github.event.pull_request.body }}
+      PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+      PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install psql client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+
+      - name: Install Python dependencies
+        run: pip install -r .github/scripts/requirements.txt
+
+      - name: Detect changed SQL files
+        id: changed
+        run: |
+          FILES=$(git diff --name-only --diff-filter=AM "$PR_BASE_SHA" "$PR_HEAD_SHA" -- 'migrations/**/*.sql' | tr '\n' ' ')
+          echo "Changed SQL files: $FILES"
+          echo "files=$FILES" >> "$GITHUB_OUTPUT"
+
+      - name: Run Lakebase PR validation
+        if: steps.changed.outputs.files != ''
+        run: python .github/scripts/lakebase_pr_validate.py ${{ steps.changed.outputs.files }}
+
+      - name: No SQL changes
+        if: steps.changed.outputs.files == ''
+        run: echo "No SQL files changed; skipping Lakebase validation."
+
+  cleanup:
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+      LAKEBASE_PROJECT: ${{ secrets.LAKEBASE_PROJECT }}
+      PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r .github/scripts/requirements.txt
+      - name: Delete Lakebase branch
+        run: python .github/scripts/lakebase_pr_cleanup.py
