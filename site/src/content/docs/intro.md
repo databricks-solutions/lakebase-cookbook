@@ -21,6 +21,7 @@ for transactional workloads that sit alongside your lakehouse.
 |---------|-------------|
 | [Genie Caching](/docs/examples/genie-caching/) | Genie API gateway with a Lakebase (pgvector) semantic query cache |
 | [GraphRAG](/docs/examples/graphrag/) | Knowledge-graph-augmented RAG with pgvector seeding and recursive-CTE graph traversal |
+| [Branching CI/CD](/docs/examples/branching-cicd/) | Validate schema changes on an isolated Lakebase branch in GitHub CI/CD, with an AI impact report per PR |
 | [AI Memory](/docs/examples/ai-memory/) | AI memory patterns backed by Lakebase |
 | [Apps](/docs/examples/apps/) | Sample applications on Lakebase |
 | [Feature Store](/docs/examples/feature-store/) | Feature store integration |

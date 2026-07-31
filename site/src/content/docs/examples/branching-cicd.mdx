@@ -1,0 +1,95 @@
+---
+title: Branching CI/CD — validate schema changes on a Lakebase branch
+sidebar_label: Branching CI/CD
+sidebar_position: 25
+description: A GitHub CI/CD workflow that forks a Lakebase branch per PR, runs the changed SQL there, and posts an AI impact review before merge.
+---
+import Callout from '../../../components/Callout.astro';
+
+# Branching CI/CD — validate schema changes on a Lakebase branch
+
+A reference GitHub CI/CD workflow that uses **Lakebase branching** to ship
+database schema changes with confidence. Every pull request that touches
+`migrations/` forks a short-lived Lakebase branch off `production` — a
+copy-on-write copy of the production schema *and data*, ready in seconds — runs
+the changed SQL there, has an AI Gateway model analyze the impact, and posts the
+report on the PR. Merging applies the migration to production exactly once;
+closing the PR deletes the branch.
+
+Schema changes never touch production directly, and reviewers see a real
+execution result plus an AI risk assessment before they approve.
+
+## Architecture
+
+```
+            ┌───────────────── your repo ─────────────────┐
+            │ migrations/*.sql   scripts/   .github/        │
+            └──────┬───────────────────────────┬───────────┘
+   PR opened       │                merge to main
+        │          │                           │
+        ▼          │                           ▼
+  ┌──────────────┐ │                  apply pending migrations
+  │ Lakebase     │◀┘ forked from      to the production branch
+  │ branch:      │   production       (exactly-once via
+  │ pr-<n>-<slug>│                     schema_migrations)
+  └──────┬───────┘
+         │
+         ▼
+  run changed SQL  →  AI Gateway impact analysis  →  PR comment
+         │
+         ▼
+  PR closed  →  delete branch
+```
+
+## How the workflow runs
+
+1. **PR validate** (`lakebase-pr-validate.yml`) — on a PR touching
+   `migrations/`, fork a Lakebase branch `pr-<n>-<slug>` off `production` (24h
+   TTL), run the changed SQL via `psql`, collect row-count stats, and send the
+   PR context plus execution results to an AI Gateway model. It returns an intent
+   summary, risk analysis (data loss, locking, constraints), and an
+   APPROVE / REQUEST_CHANGES / BLOCK recommendation — posted as a PR comment. The
+   check fails if any statement failed.
+2. **Deploy on merge** (`lakebase-deploy.yml`) — a push to `main` touching
+   `migrations/` applies pending migrations to the `production` branch. A
+   `schema_migrations` table (checksum-tracked) makes this exactly-once and flags
+   drift if an already-applied file changed.
+3. **Cleanup** — closing the PR deletes its Lakebase branch.
+
+You can run the identical validation locally, without GitHub:
+
+```bash
+databricks auth login
+./.github/scripts/run_local.sh migrations/003_your_change.sql
+```
+
+## Prerequisites and secrets
+
+You provision the Lakebase project the workflow acts on, then add the GitHub
+Actions secrets the workflows read:
+
+| Secret | Example |
+|--------|---------|
+| `DATABRICKS_HOST` | `https://<workspace>.cloud.databricks.com` |
+| `DATABRICKS_TOKEN` | PAT or SP OAuth token with Lakebase permissions |
+| `LAKEBASE_PROJECT` | your Lakebase project id |
+| `LAKEBASE_SOURCE_BRANCH` | `production` |
+| `LAKEBASE_DATABASE` | `databricks_postgres` |
+| `LAKEBASE_PG_USER` | the Postgres role / user email |
+| `AI_GATEWAY_MODEL` | `databricks-claude-opus-4-7` |
+
+You also need a long-lived `production` Lakebase branch with a READ_WRITE
+endpoint, and a model-serving / AI Gateway chat endpoint for the review.
+
+<Callout type="note" title="A reference workflow, not a bundle deploy">
+Unlike the other examples, this one ships no `databricks.yml`. The workflows,
+scripts, and migrations are meant to be copied into *your own* repository root
+(GitHub only runs workflows from a repo's root `.github/`), where they act on a
+Lakebase project you provision separately. See the folder README for the exact
+setup steps.
+</Callout>
+
+<Callout type="note" title="Source">
+The full example lives in
+[`branching_cicd/`](https://github.com/databricks-solutions/lakebase-cookbook/tree/main/branching_cicd).
+</Callout>

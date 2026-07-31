@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Local runner venv created by .github/scripts/run_local.sh
+.venv-local/
+.github/scripts/.venv-local/
+
+# Environment — never commit real secrets; keep only .env.example
+.env
+.env.local
+!.env.example
+
+# uv
+uv.lock
+
+# IDEs / OS
+.vscode/
+.idea/
+.DS_Store
