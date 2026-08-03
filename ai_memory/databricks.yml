@@ -1,0 +1,57 @@
+# Databricks Asset Bundle for the "AI Memory" Lakebase Cookbook example.
+#
+# Deploy:  databricks bundle deploy -t demo
+# Run:     databricks bundle run ai_memory -t demo
+#
+# Override any workspace-specific value at deploy time, e.g. the Lakebase DB path:
+#   databricks bundle deploy -t demo \
+#     --var lakebase_database="projects/<project>/branches/<branch>/databases/<id>"
+
+bundle:
+  name: ai-memory
+
+include:
+  - resources/*.yml
+
+# All workspace-specific values are variables — never hardcode them in code.
+# Keep sizing small/cheap (scale-to-zero, smallest warehouse) per CONTRIBUTING.md.
+variables:
+  app_name:
+    default: ai-memory-demo
+  # Lakebase — retrieve the full database path from Catalog Explorer -> Lakebase,
+  # or the Lakebase APIs, after the project/branch/database exist.
+  lakebase_branch:
+    description: Lakebase project/branch path, e.g. projects/<project>/branches/<branch>
+    default: projects/CHANGE_ME/branches/production
+  lakebase_database:
+    description: Full Lakebase database resource path (required for the Postgres binding).
+    default: projects/CHANGE_ME/branches/production/databases/CHANGE_ME
+  lakebase_instance:
+    description: Lakebase database instance name (used to mint OAuth credentials).
+    default: CHANGE_ME
+  lakebase_catalog:
+    default: default
+  lakebase_schema:
+    default: public
+  embedding_endpoint:
+    description: Databricks Foundation Model embedding endpoint.
+    default: databricks-bge-large-en
+
+sync:
+  paths:
+    - ./
+
+targets:
+  demo:
+    default: true
+    mode: production
+    workspace:
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      app_name: ai-memory-demo
+      lakebase_branch: projects/CHANGE_ME/branches/production
+      lakebase_database: projects/CHANGE_ME/branches/production/databases/CHANGE_ME
+      lakebase_instance: CHANGE_ME
+      lakebase_catalog: default
+      lakebase_schema: public
+      embedding_endpoint: databricks-bge-large-en

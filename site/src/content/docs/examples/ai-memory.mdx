@@ -1,16 +1,86 @@
 ---
-title: AI Memory
+title: AI Memory — durable agent memory on Lakebase
+sidebar_label: AI Memory
 sidebar_position: 20
-description: AI memory patterns backed by Lakebase Postgres.
+description: Persistent short-term, long-term, and semantic agent memory backed by Lakebase Postgres and pgvector.
 ---
 import Callout from '../../../components/Callout.astro';
 
-# AI Memory
+# AI Memory — durable agent memory on Lakebase
 
-AI memory patterns backed by Lakebase Postgres.
+Give an agent **persistent, queryable memory** backed by a single governed
+Lakebase Postgres store. Three layers share one database: short-term
+conversation history, long-term facts, and semantic recall over those facts with
+`pgvector`. A minimal Chainlit chat app demonstrates all three; the reusable
+code lives in `agent_memory/`.
 
-<Callout type="info" title="Coming soon">
-This example is a work in progress. See
-[`ai_memory/`](https://github.com/databricks-solutions/lakebase-cookbook/tree/main/ai_memory)
-for the latest.
+## Features
+
+| Layer | What it stores | How it's used |
+|-------|----------------|----------------|
+| **Short-term** | Raw conversation turns per `(user, session)` | Working context window (`recent_turns`) |
+| **Long-term facts** | Durable user facts ("prefers metric units") | Survive across sessions (`remember` / `list_memories`) |
+| **Semantic recall** | A `pgvector` embedding of each fact | Cosine-similarity lookup of the most relevant memories (`recall`) |
+
+- **App owns its schema.** The app service principal creates (and therefore
+  owns) its tables on startup, so schema access survives redeploys without
+  re-granting table privileges after each `bundle deploy`.
+- **On-platform embeddings.** A Databricks Foundation Model endpoint
+  (`databricks-bge-large-en` by default) produces embeddings — no third-party
+  API key.
+- **Fully bundle-driven.** Every workspace-specific value is a DAB variable.
+
+## Architecture
+
+```
+User --> Chainlit App (Databricks App)
+             |
+             |  1. recall(query)         +-------------------------------+
+             |-------------------------->|  Lakebase Postgres            |
+             |  2. recent_turns()        |  conversations  (short-term)  |
+             |  4. add_turn()/remember() |  memories + pgvector           |
+             |-------------------------->|            (long-term+recall)  |
+             |                           +-------------------------------+
+             |  3. chat + embed
+             v
+   Databricks Foundation Models
+```
+
+The app talks to Lakebase as its **service principal**, minting short-lived
+OAuth tokens (auto-refreshed) as the Postgres password. Chat and embeddings both
+use Databricks Foundation Model serving endpoints.
+
+## Deploy
+
+<Callout type="note" title="Prerequisites">
+A Lakebase project/branch/database with the `vector` (pgvector) extension
+available; `CREATE` on the target schema granted to the app service principal
+(it has only `USAGE` by default); and a Foundation Model embedding endpoint
+(default `databricks-bge-large-en`) plus a chat endpoint.
+</Callout>
+
+```bash
+databricks bundle validate -t demo
+databricks bundle deploy -t demo \
+  --var lakebase_branch="projects/<project>/branches/<branch>" \
+  --var lakebase_database="projects/<project>/branches/<branch>/databases/<id>" \
+  --var lakebase_instance="<your-lakebase-instance-name>"
+```
+
+Chat with the app; say `remember: I prefer metric units` to store a long-term
+fact, and later questions will recall it automatically.
+
+## Configuration
+
+| Variable | What it does | Default |
+|----------|--------------|---------|
+| `lakebase_branch` | Lakebase project/branch path | `projects/CHANGE_ME/branches/production` |
+| `lakebase_database` | Full Lakebase database resource path | `.../databases/CHANGE_ME` |
+| `lakebase_instance` | Lakebase database instance name (mints OAuth credentials) | `CHANGE_ME` |
+| `lakebase_catalog` / `lakebase_schema` | UC catalog / Postgres schema | `default` / `public` |
+| `embedding_endpoint` | Foundation Model embedding endpoint | `databricks-bge-large-en` |
+
+<Callout type="note" title="Source">
+The full example lives in
+[`ai_memory/`](https://github.com/databricks-solutions/lakebase-cookbook/tree/main/ai_memory).
 </Callout>

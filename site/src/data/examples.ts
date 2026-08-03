@@ -42,7 +42,7 @@ export const EXAMPLES: ExampleCard[] = [
     description:
       'Give agents persistent, queryable memory backed by Lakebase Postgres — conversation history, facts, and embeddings on one governed store.',
     href: '/docs/examples/ai-memory/',
-    status: 'soon',
+    status: 'ready',
   },
   {
     tag: 'FastAPI App',
