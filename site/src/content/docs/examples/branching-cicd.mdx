@@ -64,6 +64,62 @@ databricks auth login
 ./.github/scripts/run_local.sh migrations/003_your_change.sql
 ```
 
+## Inside the PR validation
+
+[`lakebase_pr_validate.py`](https://github.com/databricks-solutions/lakebase-cookbook/tree/main/developer_experience/branching_cicd/.github/scripts/lakebase_pr_validate.py)
+drives the whole check against the Lakebase Postgres API:
+
+- **Fork the branch** — `POST /api/2.0/postgres/projects/{project}/branches` with
+  `{"spec": {"source_branch": "…/production", "ttl": "86400s"}}`. The branch is
+  named `pr-<number>-<slug>` (the head ref, slugified, capped at 48 chars). If it
+  already exists (a PR update), it's reused rather than recreated — the run is
+  idempotent.
+- **Mint a short-lived credential** — `POST /api/2.0/postgres/credentials` for the
+  branch's READ_WRITE endpoint (it falls back to any endpoint if none is marked
+  read-write).
+- **Run only the changed files** — detected with
+  `git diff --diff-filter=AM $PR_BASE_SHA $PR_HEAD_SHA -- 'migrations/**/*.sql'`,
+  executed with `psql -v ON_ERROR_STOP=1 -X -a` over `sslmode=require`. stdout and
+  stderr are captured (tail 8 000 chars) and each file's duration recorded.
+- **Collect table stats** — table names are parsed out of the SQL and a
+  `SELECT count(*)` runs on each (up to 10), giving the reviewer before/after
+  row counts.
+- **AI review** — PR title/body + SQL + execution output + stats go to the model
+  (`AI_GATEWAY_MODEL`, default `databricks-claude-opus-4-7`) under the system
+  prompt *"You are a senior database reviewer for production Postgres changes."*
+  It returns an intent summary, a per-statement success check, an assessment of
+  any test cases stated in the PR body, risk flags (data loss, locking,
+  constraints, RLS, indexes), and an **APPROVE / REQUEST_CHANGES / BLOCK** call.
+  The call tries `/serving-endpoints/{model}/invocations` and falls back to the
+  AI Gateway chat-completions route.
+- **Comment + exit code** — the report is posted as a PR comment with a PASS/FAIL
+  badge, a results table, and collapsible error output. The job's exit code
+  mirrors SQL success, so a failed statement fails the check.
+
+## Exactly-once, and drift detection
+
+Both the merge-to-`main` deploy and any local run share
+[`scripts/migrations_runner.py`](https://github.com/databricks-solutions/lakebase-cookbook/tree/main/developer_experience/branching_cicd/scripts/migrations_runner.py),
+so dev and CI behave identically. It tracks applied files in a table:
+
+```sql
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    filename    TEXT PRIMARY KEY,
+    checksum    TEXT NOT NULL,           -- SHA-256 of the file content
+    applied_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    applied_by  TEXT NOT NULL DEFAULT current_user
+);
+```
+
+Files run in **filename order** (hence the zero-padded `001_`, `002_` convention),
+each inside its own transaction — a failure rolls that file back entirely and
+stops the run. Already-applied files are skipped. If a file's content changed
+*after* it was applied, its checksum no longer matches and the runner reports
+**drift** and skips it — it will not silently re-apply edited history, so the fix
+is a new migration, never an edit to an old one. The deploy workflow also runs
+under a `cancel-in-progress: false` concurrency group, so production migrations
+are serialized and never race.
+
 ## Prerequisites and secrets
 
 You provision the Lakebase project the workflow acts on, then add the GitHub
