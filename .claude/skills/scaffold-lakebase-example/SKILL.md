@@ -1,8 +1,9 @@
 ---
 name: scaffold-lakebase-example
 description: >-
-  Scaffold a new Lakebase Cookbook example folder — the top-level snake_case
-  directory with a Databricks Asset Bundle (databricks.yml + resources/),
+  Scaffold a new Lakebase Cookbook example folder — a snake_case directory under
+  a category folder (agents/, apps/, developer_experience/, data/) with a
+  Databricks Asset Bundle (databricks.yml + resources/),
   pyproject.toml (uv), README.md, .env.example, and .gitignore. Use when a
   contributor is starting a new example and needs the standard file layout and
   DAB templates. Implements CONTRIBUTING.md sections 1–3. Triggers on "scaffold
@@ -17,7 +18,10 @@ is [`apps/lakebase-fastapi/`](../../../apps/lakebase-fastapi/) — mirror its st
 
 ## Inputs to collect first
 
-- **`<name>`** — the example name in `snake_case`. This is the top-level folder.
+- **`<name>`** — the example name in `snake_case`. This is the example folder.
+- **`<category>`** — the category folder it lives under: `agents`, `apps`,
+  `developer_experience`, or `data` (or propose a new one). Examples are grouped
+  by category — e.g. `agents/<name>/`.
 - **`<title>`** — human title, e.g. "Vector Search Reranking".
 - **`<description>`** — one sentence.
 - **Resources deployed** — app / job / pipeline / dashboard / etc.
@@ -29,12 +33,13 @@ If any are missing, ask before scaffolding.
 
 ## What to create
 
-Create `<name>/` at the **repo root** with these files. Templates live in this
-skill's [`templates/`](templates/) directory — copy them and substitute the
+Create `<category>/<name>/` (under the category folder, e.g.
+`agents/<name>/`) with these files. Templates live in this skill's
+[`templates/`](templates/) directory — copy them and substitute the
 placeholders (`__NAME__`, `__TITLE__`, `__DESCRIPTION__`, `__BUNDLE_NAME__`).
 
 ```
-<name>/
+<category>/<name>/          # e.g. agents/vector_search_rerank/
 ├── README.md              # from templates/README.md.tmpl
 ├── databricks.yml         # from templates/databricks.yml.tmpl
 ├── resources/

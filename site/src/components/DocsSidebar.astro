@@ -1,8 +1,9 @@
 ---
-import { getSidebar } from '../lib/docs';
+import { getSidebar, type SidebarItem } from '../lib/docs';
 const sidebar = await getSidebar();
 const current = Astro.url.pathname;
 const norm = (p: string) => (p.endsWith('/') ? p : p + '/');
+const isActive = (item: SidebarItem) => norm(current) === norm(item.href);
 ---
 
 <nav aria-label="Docs" class="flex flex-col gap-6">
@@ -14,17 +15,18 @@ const norm = (p: string) => (p.endsWith('/') ? p : p + '/');
             {group.label}
           </div>
         )}
-        <ul class="flex flex-col gap-0.5">
-          {group.items.map((item) => {
-            const active = norm(current) === norm(item.href);
-            return (
+
+        {/* Ungrouped items directly under the group */}
+        {group.items.length > 0 && (
+          <ul class="flex flex-col gap-0.5">
+            {group.items.map((item) => (
               <li>
                 <a
                   href={item.href}
-                  aria-current={active ? 'page' : undefined}
+                  aria-current={isActive(item) ? 'page' : undefined}
                   class:list={[
                     'block border-l-2 py-1.5 pl-3 text-sm transition-colors',
-                    active
+                    isActive(item)
                       ? 'border-[var(--color-lava-600)] font-semibold text-[var(--color-lava-600)]'
                       : 'border-[var(--color-line)] text-[var(--color-muted)] hover:border-[var(--color-ink)] hover:text-[var(--color-ink)]',
                   ]}
@@ -32,9 +34,36 @@ const norm = (p: string) => (p.endsWith('/') ? p : p + '/');
                   {item.label}
                 </a>
               </li>
-            );
-          })}
-        </ul>
+            ))}
+          </ul>
+        )}
+
+        {/* Category sub-groups */}
+        {group.categories.map((cat) => (
+          <div class="mt-4">
+            <div class="mb-1.5 pl-3 text-[0.7rem] font-semibold tracking-wide text-[var(--color-ink)]">
+              {cat.label}
+            </div>
+            <ul class="flex flex-col gap-0.5">
+              {cat.items.map((item) => (
+                <li>
+                  <a
+                    href={item.href}
+                    aria-current={isActive(item) ? 'page' : undefined}
+                    class:list={[
+                      'block border-l-2 py-1.5 pl-4 text-sm transition-colors',
+                      isActive(item)
+                        ? 'border-[var(--color-lava-600)] font-semibold text-[var(--color-lava-600)]'
+                        : 'border-[var(--color-line)] text-[var(--color-muted)] hover:border-[var(--color-ink)] hover:text-[var(--color-ink)]',
+                    ]}
+                  >
+                    {item.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
       </div>
     ))
   }

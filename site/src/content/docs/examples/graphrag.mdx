@@ -1,7 +1,8 @@
 ---
 title: GraphRAG on Lakebase
 sidebar_label: GraphRAG
-sidebar_position: 15
+category: Agents
+sidebar_position: 11
 description: Knowledge-graph-augmented RAG served entirely from Lakebase — pgvector semantic seed plus recursive-CTE graph traversal.
 ---
 import Callout from '../../../components/Callout.astro';
@@ -77,5 +78,5 @@ uv run --python 3.11 --with duckdb --with numpy smoketest/graphrag_logic_smokete
 
 <Callout type="note" title="Source">
 The full example lives in
-[`graphrag/`](https://github.com/databricks-solutions/lakebase-cookbook/tree/main/graphrag).
+[`agents/graphrag/`](https://github.com/databricks-solutions/lakebase-cookbook/tree/main/agents/graphrag).
 </Callout>
