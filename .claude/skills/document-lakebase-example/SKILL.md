@@ -33,7 +33,7 @@ Create `site/src/content/docs/examples/<slug>.mdx` from this skill's
 
 - **`sidebar_position`** orders the sidebar; existing examples use 10, 20, 30…
   Read the other files in `site/src/content/docs/examples/` and pick a value that
-  slots this example where it belongs. (`genie-caching` = 10.)
+  slots this example where it belongs. (`graphrag` = 15, `lakebase-fastapi` = 30.)
 - Use `.mdx` (not `.md`) if you use the `<Callout>` component. Import it from
   `../../../components/Callout.astro`.
 - Convert any Docusaurus-style `:::note … :::` admonitions to
