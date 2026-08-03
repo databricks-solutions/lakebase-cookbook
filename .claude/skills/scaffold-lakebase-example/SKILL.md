@@ -13,7 +13,7 @@ description: >-
 
 Create a new, deployable example folder that matches the repo conventions and
 [`CONTRIBUTING.md`](../../../CONTRIBUTING.md) §1–§3. The reference implementation
-is [`genie_caching/`](../../../genie_caching/) — mirror its structure.
+is [`apps/lakebase-fastapi/`](../../../apps/lakebase-fastapi/) — mirror its structure.
 
 ## Inputs to collect first
 
@@ -63,7 +63,7 @@ Add source files the example actually needs (`app.py`, `notebooks/`,
 
 ## Choosing the resource file
 
-- **App** (like `genie_caching`): use `templates/resource.app.yml.tmpl`.
+- **App** (like `apps/lakebase-fastapi`): use `templates/resource.app.yml.tmpl`.
 - **Job / pipeline / dashboard**: replace the `apps:` block with the appropriate
   DAB resource type. Look up the exact schema in the `databricks-dabs` skill or
   the Databricks docs rather than guessing — if that skill is available, defer to

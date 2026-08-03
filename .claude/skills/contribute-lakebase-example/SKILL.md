@@ -31,12 +31,12 @@ and CONTRIBUTING.md ever disagree, CONTRIBUTING.md wins — and you should flag 
 drift to the contributor.
 
 Also skim the fully worked reference example
-[`genie_caching/`](../../../genie_caching/) — every scaffold decision mirrors it.
+[`apps/lakebase-fastapi/`](../../../apps/lakebase-fastapi/) — every scaffold decision mirrors it.
 
 ## Orient before acting
 
 Confirm you are working in the `lakebase-cookbook` repo (top-level folders like
-`ai_memory/`, `genie_caching/`, and a `site/` directory). Then ask the
+`ai_memory/`, `apps/`, and a `site/` directory). Then ask the
 contributor for the essentials if not already given:
 
 - **Example name** (`snake_case`, e.g. `vector_search_rerank`).

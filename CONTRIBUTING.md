@@ -59,8 +59,8 @@ step by hand — the skills are a convenience, not a requirement.
 ## 1. Create the example folder
 
 Add a new **top-level folder** named in `snake_case` (matching the existing
-`ai_memory/`, `apps/`, `feature_store/`, `reverse_etl/`, `genie_caching/`). Use
-the fully worked [`genie_caching/`](genie_caching/) example as your reference for
+`ai_memory/`, `apps/`, `feature_store/`, `reverse_etl/`). Use the fully worked
+[`apps/lakebase-fastapi/`](apps/lakebase-fastapi/) example as your reference for
 structure.
 
 ### Required files
@@ -99,7 +99,7 @@ baseline.
 
 Each example's `README.md` is the deep, source-of-truth documentation. The
 cookbook site page (§4) is a shorter, styled mirror of it. Structure it like
-[`genie_caching/README.md`](genie_caching/README.md):
+[`apps/lakebase-fastapi/README.md`](apps/lakebase-fastapi/README.md):
 
 1. **Title + one-paragraph summary** — what it does and why you'd use it.
 2. **Features / what you get** — a short table.
@@ -119,7 +119,7 @@ example. Spell out every prerequisite and every variable they must set.
 ## 3. Make it deployable with Databricks Asset Bundles
 
 All resources deploy via DABs. Model your `databricks.yml` on
-[`genie_caching/databricks.yml`](genie_caching/databricks.yml):
+[`apps/lakebase-fastapi/databricks.yml`](apps/lakebase-fastapi/databricks.yml):
 
 - Give the bundle a unique `name`.
 - Put each resource (app, job, pipeline, dashboard…) in its own file under
@@ -159,7 +159,7 @@ under `examples/` **appear in the sidebar automatically**. See
 Create `site/src/content/docs/examples/<your-example>.mdx` (use `.mdx` if you
 want the `<Callout>` component; plain `.md` is fine otherwise). Copy the
 frontmatter shape from an existing page such as
-[`genie-caching.mdx`](site/src/content/docs/examples/genie-caching.mdx):
+[`lakebase-fastapi.mdx`](site/src/content/docs/examples/lakebase-fastapi.mdx):
 
 ```mdx
 ---

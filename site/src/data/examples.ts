@@ -9,15 +9,6 @@ export interface ExampleCard {
 
 export const EXAMPLES: ExampleCard[] = [
   {
-    tag: 'Genie Caching',
-    title: 'Semantic cache in front of Genie',
-    bracket: 'pgvector similarity, per-gateway TTL, Genie-compatible REST + MCP',
-    description:
-      'A Databricks App that fronts Genie with a Lakebase pgvector cache. Repeated or semantically similar questions skip NL→SQL and reuse cached SQL against your warehouse for fresher numbers with less work.',
-    href: '/docs/examples/genie-caching/',
-    status: 'ready',
-  },
-  {
     tag: 'GraphRAG',
     title: 'Knowledge-graph RAG on Lakebase',
     bracket: 'pgvector seed, recursive-CTE graph traversal',

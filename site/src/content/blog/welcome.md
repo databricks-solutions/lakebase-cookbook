@@ -15,12 +15,13 @@ packaging and `ruff` for linting.
 
 ## What's here today
 
-The first fully worked example is **[Genie Caching](/docs/examples/genie-caching/)** —
-a Databricks App that fronts Genie with a Lakebase (pgvector) semantic query
-cache, so repeated or similar questions skip NL→SQL and reuse cached SQL against
-your warehouse.
+One fully worked example is **[GraphRAG](/docs/examples/graphrag/)** — a
+knowledge-graph-augmented RAG served entirely from Lakebase, pairing a pgvector
+semantic seed with recursive-CTE graph traversal. There's also a
+**[FastAPI backend on Lakebase](/docs/examples/lakebase-fastapi/)** and a
+**[Branching CI/CD](/docs/examples/branching-cicd/)** workflow.
 
-More examples — AI memory, apps, feature store, and reverse ETL — are on the way.
+More examples — AI memory, feature store, and reverse ETL — are on the way.
 
 ## Contributing
 
