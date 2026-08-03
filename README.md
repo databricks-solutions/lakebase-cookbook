@@ -8,12 +8,14 @@ Examples and guides to accelerate your Lakebase projects:
 
 ## Examples in this repository
 
-| Folder | Description |
-|--------|--------------|
-| [`ai_memory/`](ai_memory/) | AI memory patterns |
-| [`apps/`](apps/) | Sample applications |
-| [`feature_store/`](feature_store/) | Feature store integration |
-| [`reverse_etl/`](reverse_etl/) | Reverse ETL examples |
+Examples are grouped into category folders:
+
+| Category | Examples |
+|----------|----------|
+| [`agents/`](agents/) | [`graphrag/`](agents/graphrag/) — knowledge-graph RAG on Lakebase; [`ai_memory/`](agents/ai_memory/) — durable agent memory |
+| [`developer_experience/`](developer_experience/) | [`branching_cicd/`](developer_experience/branching_cicd/) — validate schema changes on a Lakebase branch in CI/CD |
+| [`apps/`](apps/) | [`lakebase-fastapi/`](apps/lakebase-fastapi/) — FastAPI backend serving a Lakebase synced table |
+| [`data/`](data/) | [`feature_store/`](data/feature_store/) — online feature serving; [`reverse_etl/`](data/reverse_etl/) — lakehouse → Lakebase sync |
 
 ## Contributing
 

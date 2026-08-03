@@ -3,8 +3,8 @@ name: contribute-lakebase-example
 description: >-
   End-to-end guide for contributing a new example to the Lakebase Cookbook
   repository. Use when a contributor wants to add, build, document, or submit a
-  Lakebase example (a new top-level example folder + its cookbook site doc
-  page). Orchestrates scaffolding, documentation, and verification, following
+  Lakebase example (a new example folder under a category dir + its cookbook
+  site doc page). Orchestrates scaffolding, documentation, and verification, following
   CONTRIBUTING.md. Triggers on "add an example", "contribute to the cookbook",
   "new Lakebase example", "document my example", or pointing an agent at
   CONTRIBUTING.md.
@@ -35,9 +35,9 @@ Also skim the fully worked reference example
 
 ## Orient before acting
 
-Confirm you are working in the `lakebase-cookbook` repo (top-level folders like
-`ai_memory/`, `apps/`, and a `site/` directory). Then ask the
-contributor for the essentials if not already given:
+Confirm you are working in the `lakebase-cookbook` repo (category folders like
+`agents/`, `apps/`, `developer_experience/`, `data/`, and a `site/` directory).
+Then ask the contributor for the essentials if not already given:
 
 - **Example name** (`snake_case`, e.g. `vector_search_rerank`).
 - **One-line description** of what it demonstrates and which Lakebase capability

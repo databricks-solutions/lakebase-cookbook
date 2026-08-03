@@ -10,6 +10,9 @@ const docs = defineCollection({
     sidebar_position: z.number().default(100),
     // Optional short label used in the sidebar instead of the full title.
     sidebar_label: z.string().optional(),
+    // Category groups examples in the sidebar and on the landing page,
+    // e.g. "Agents", "Developer Experience". Omit for ungrouped docs.
+    category: z.string().optional(),
     draft: z.boolean().default(false),
   }),
 });
