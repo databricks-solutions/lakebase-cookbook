@@ -1,0 +1,28 @@
+# Managed with uv (https://docs.astral.sh/uv/). Lint/format with ruff.
+#   uv sync                 # install deps into .venv
+#   uv run ruff check .     # lint
+#   uv run ruff format .    # format
+[project]
+name = "ai_memory"
+version = "0.1.0"
+description = "Durable agent memory (short-term, long-term, semantic recall) on Lakebase Postgres."
+requires-python = ">=3.11"
+dependencies = [
+  "chainlit>=2.11",
+  "databricks-sdk>=0.65",
+  "sqlalchemy>=2.0",
+  "psycopg[binary]>=3.2",
+  "pydantic>=2.11",
+]
+
+[dependency-groups]
+dev = [
+  "ruff",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

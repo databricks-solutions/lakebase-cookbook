@@ -1,0 +1,35 @@
+# Databricks App resource for the "AI Memory" example.
+# Paths are relative to the bundle root (`..` exits the resources/ folder).
+resources:
+  apps:
+    ai_memory:
+      name: ${var.app_name}
+      description: "Durable agent memory (short-term, long-term, semantic) on Lakebase Postgres."
+      # Bundle sync uploads the repo tree; the app resolves app.yml/command from it.
+      source_code_path: ../
+      # Smallest valid app compute per CONTRIBUTING.md. Valid values are
+      # MEDIUM / LARGE / XLARGE (there is no SMALL for Databricks Apps).
+      compute_size: MEDIUM
+      user_api_scopes:
+        - sql
+        # Query the Foundation Model embedding + chat serving endpoints.
+        - serving.serving-endpoints
+
+      resources:
+        - name: postgres
+          postgres:
+            branch: ${var.lakebase_branch}
+            database: ${var.lakebase_database}
+            # App SP creates and OWNS its tables -> access survives redeploys.
+            permission: CAN_CONNECT_AND_CREATE
+
+      config:
+        env:
+          - name: LAKEBASE_INSTANCE
+            value: ${var.lakebase_instance}
+          - name: LAKEBASE_CATALOG
+            value: ${var.lakebase_catalog}
+          - name: LAKEBASE_SCHEMA
+            value: ${var.lakebase_schema}
+          - name: EMBEDDING_ENDPOINT
+            value: ${var.embedding_endpoint}

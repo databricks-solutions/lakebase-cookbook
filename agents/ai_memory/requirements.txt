@@ -1,0 +1,7 @@
+# Databricks Apps installs from this file at deploy time.
+# Kept in sync with pyproject.toml [project.dependencies].
+chainlit>=2.11
+databricks-sdk>=0.65
+sqlalchemy>=2.0
+psycopg[binary]>=3.2
+pydantic>=2.11

@@ -32,11 +32,11 @@ export const EXAMPLES: ExampleCard[] = [
     category: 'Agents',
     tag: 'AI Memory',
     title: 'Durable memory for agents',
-    bracket: 'Postgres-backed short- and long-term memory',
+    bracket: 'Chainlit history + pgvector semantic recall',
     description:
-      'Give agents persistent, queryable memory backed by Lakebase Postgres — conversation history, facts, and embeddings on one governed store.',
+      'Give an agent persistent memory on one Lakebase store: short-term conversation history via Chainlit’s data layer, long-term facts, and semantic recall over them with pgvector — the app owns its schema, so access survives redeploys.',
     href: '/docs/examples/ai-memory/',
-    status: 'soon',
+    status: 'ready',
   },
   {
     category: 'Developer Experience',

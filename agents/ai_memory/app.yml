@@ -1,0 +1,20 @@
+# Databricks App entrypoint for the AI Memory example.
+command: ["chainlit", "run", "app.py", "--host", "0.0.0.0", "--port", "8000"]
+
+env:
+  # PGHOST / PGPORT / PGUSER are auto-injected by the Postgres app resource.
+  # These are the values not covered by that binding — set per deployment.
+  - name: PGDATABASE
+    value: "databricks_postgres"
+  - name: LAKEBASE_SCHEMA
+    value: "aimem"
+  # Lakebase database instance name (used to mint OAuth credentials).
+  - name: LAKEBASE_INSTANCE
+    value: "<your-lakebase-instance-name>"
+  # Databricks Foundation Model embedding endpoint + its output dimensionality.
+  - name: EMBEDDING_ENDPOINT
+    value: "databricks-bge-large-en"
+  - name: EMBEDDING_DIM
+    value: "1024"
+  - name: CHAINLIT_AUTH_SECRET
+    value: "<your-chainlit-auth-secret>"
