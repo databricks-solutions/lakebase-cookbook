@@ -7,8 +7,9 @@ resources:
       description: "Durable agent memory (short-term, long-term, semantic) on Lakebase Postgres."
       # Bundle sync uploads the repo tree; the app resolves app.yml/command from it.
       source_code_path: ../
-      # Keep this small per CONTRIBUTING.md. Bump only if the example truly needs it.
-      compute_size: SMALL
+      # Smallest valid app compute per CONTRIBUTING.md. Valid values are
+      # MEDIUM / LARGE / XLARGE (there is no SMALL for Databricks Apps).
+      compute_size: MEDIUM
       user_api_scopes:
         - sql
         # Query the Foundation Model embedding + chat serving endpoints.
