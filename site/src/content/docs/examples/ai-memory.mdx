@@ -18,7 +18,7 @@ code lives in `agent_memory/`.
 
 | Layer | What it stores | How it's used |
 |-------|----------------|----------------|
-| **Short-term** | Raw conversation turns per `(user, session)` | Working context window (`recent_turns`) |
+| **Short-term** | Conversation threads (Chainlit's SQLAlchemy data layer) | Resumable thread sidebar + cross-session history, backed by Lakebase |
 | **Long-term facts** | Durable user facts ("prefers metric units") | Survive across sessions (`remember` / `list_memories`) |
 | **Semantic recall** | A `pgvector` embedding of each fact | Cosine-similarity lookup of the most relevant memories (`recall`) |
 
@@ -30,25 +30,37 @@ code lives in `agent_memory/`.
   API key.
 - **Fully bundle-driven.** Every workspace-specific value is a DAB variable.
 
+<Callout type="note" title="Scope">
+This example is deliberately focused on the memory story — chat persistence and
+pgvector recall — and uses a single Foundation Model for replies. It does not
+demonstrate agent routing, Genie, MAS endpoints, or streaming. For a fuller
+reference that calls a Genie One agent (via the managed Genie MCP), a
+Multi-Agent Supervisor serving endpoint, and streams responses while using this
+same Lakebase chat-history pattern, see the
+[bi-hub-app](https://github.com/rohit-db/bi-hub-app) reference application.
+</Callout>
+
 ## Architecture
 
 ```
 User --> Chainlit App (Databricks App)
-             |
-             |  1. recall(query)         +-------------------------------+
-             |-------------------------->|  Lakebase Postgres            |
-             |  2. recent_turns()        |  conversations  (short-term)  |
-             |  4. add_turn()/remember() |  memories + pgvector           |
-             |-------------------------->|            (long-term+recall)  |
-             |                           +-------------------------------+
-             |  3. chat + embed
+             |                           +-----------------------------------+
+             |  threads/steps (history)  |  Lakebase Postgres (schema: aimem)|
+             |<------------------------->|  users/threads/steps/...          |
+             |  recall(query) /          |         (Chainlit data layer)     |
+             |  remember(fact)           |  memories + pgvector              |
+             |-------------------------->|         (long-term + recall)      |
+             |  chat + embed             +-----------------------------------+
              v
    Databricks Foundation Models
 ```
 
-The app talks to Lakebase as its **service principal**, minting short-lived
-OAuth tokens (auto-refreshed) as the Postgres password. Chat and embeddings both
-use Databricks Foundation Model serving endpoints.
+Short-term history uses Chainlit's SQLAlchemy data layer (the
+`users`/`threads`/`steps` tables) for the resumable-thread sidebar; long-term
+facts + recall use the `memories` table with a `pgvector` column. Everything
+lives in a dedicated `aimem` schema, created and owned by the app service
+principal, which mints short-lived OAuth tokens (auto-refreshed) as the Postgres
+password. Chat and embeddings use Databricks Foundation Model serving endpoints.
 
 ## Deploy
 

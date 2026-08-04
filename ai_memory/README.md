@@ -1,17 +1,27 @@
 # AI Memory — durable agent memory on Lakebase Postgres
 
 Give an agent **persistent, queryable memory** backed by a single governed
-Lakebase Postgres store: short-term conversation history, long-term facts, and
-semantic recall over those facts with `pgvector`. A minimal Chainlit chat app
-demonstrates all three layers; the reusable code lives in `src/ai_memory/`.
+Lakebase Postgres store: short-term conversation history (with a resumable
+thread sidebar) and long-term facts with semantic recall over `pgvector`. A
+minimal Chainlit chat app demonstrates both; the reusable code lives in
+`agent_memory/`.
 
 ## What you get
 
 | Layer | What it stores | How it's used |
 |-------|----------------|---------------|
-| **Short-term** | Raw conversation turns per `(user, session)` | Working context window (`recent_turns`) |
+| **Short-term** | Conversation threads (Chainlit's SQLAlchemy data layer) | Resumable thread sidebar + cross-session history, backed by Lakebase |
 | **Long-term facts** | Durable user facts ("prefers metric units") | Survive across sessions (`remember` / `list_memories`) |
 | **Semantic recall** | `pgvector` embedding of each fact | Cosine-similarity lookup of the most relevant memories (`recall`) |
+
+> **Scope.** This example is deliberately focused on the *memory* story — chat
+> persistence and pgvector recall. It uses a single Databricks Foundation Model
+> for replies and does **not** demonstrate agent routing, Genie, MAS endpoints,
+> or streaming. For a fuller reference implementation that calls a **Genie One**
+> agent (via the managed Genie MCP), a **Multi-Agent Supervisor (MAS)** serving
+> endpoint, and streams responses — while using this same Lakebase chat-history
+> pattern — see the
+> [**bi-hub-app**](https://github.com/rohit-db/bi-hub-app) reference app.
 
 - **App owns its schema.** The app service principal creates (and therefore
   owns) its tables on startup, so schema access survives redeploys — no manual
@@ -25,23 +35,26 @@ demonstrates all three layers; the reusable code lives in `src/ai_memory/`.
 
 ```
 User --> Chainlit App (Databricks App)
-             |
-             |  1. recall(query)         +-------------------------------+
-             |-------------------------->|  Lakebase Postgres            |
-             |  2. recent_turns()        |                               |
-             |                           |  conversations  (short-term)  |
-             |  4. add_turn()/remember() |  memories + pgvector           |
-             |-------------------------->|            (long-term+recall)  |
-             |                           +-------------------------------+
-             |  3. chat + embed
+             |                           +-----------------------------------+
+             |  threads/steps (history)  |  Lakebase Postgres (schema: aimem)|
+             |<------------------------->|                                   |
+             |  recall(query) /          |  users/threads/steps/...          |
+             |  remember(fact)           |         (Chainlit data layer)     |
+             |-------------------------->|  memories + pgvector              |
+             |                           |         (long-term + recall)      |
+             |  chat + embed             +-----------------------------------+
              v
    Databricks Foundation Models
    (chat model + embedding endpoint)
 ```
 
-The app talks to Lakebase as its **service principal**, minting short-lived
-OAuth tokens (auto-refreshed) as the Postgres password. Embeddings and chat both
-go to Databricks Foundation Model serving endpoints.
+Short-term history uses **Chainlit's SQLAlchemy data layer** (the
+`users`/`threads`/`steps` tables), which drives the resumable-thread sidebar.
+Long-term facts + recall use the `memories` table with a `pgvector` column.
+Everything lives in a dedicated `aimem` schema, created and owned by the app
+**service principal**, which mints short-lived OAuth tokens (auto-refreshed) as
+the Postgres password. Chat and embeddings use Databricks Foundation Model
+serving endpoints.
 
 ## Deploy with Asset Bundles
 
@@ -50,9 +63,12 @@ go to Databricks Foundation Model serving endpoints.
 - A **Lakebase** project + branch + database. The database must have the
   **`vector` (pgvector) extension** available (the app runs
   `CREATE EXTENSION IF NOT EXISTS vector`).
-- The app service principal needs **`CREATE` on the target schema** (it has only
-  `USAGE` by default). Grant it once:
-  `GRANT CREATE ON SCHEMA public TO "<app-service-principal-id>";`
+- The app creates and owns its own `aimem` schema on startup, so the app service
+  principal needs **`CREATE` on the database** (granted once):
+  `GRANT CREATE ON DATABASE <db> TO "<app-service-principal-id>";`
+- **Authentication must be enabled** on the app. Chainlit only persists threads
+  (the resumable sidebar) for an authenticated user; on Databricks Apps the
+  forwarded SSO identity is used (see `header_auth` in `app.py`).
 - A Databricks **Foundation Model embedding endpoint** (default
   `databricks-bge-large-en`) and a chat endpoint (`databricks-claude-sonnet-4-5`).
 

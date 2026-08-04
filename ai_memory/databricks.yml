@@ -32,7 +32,7 @@ variables:
   lakebase_catalog:
     default: default
   lakebase_schema:
-    default: public
+    default: aimem
   embedding_endpoint:
     description: Databricks Foundation Model embedding endpoint.
     default: databricks-bge-large-en
@@ -53,5 +53,5 @@ targets:
       lakebase_database: projects/CHANGE_ME/branches/production/databases/CHANGE_ME
       lakebase_instance: CHANGE_ME
       lakebase_catalog: default
-      lakebase_schema: public
+      lakebase_schema: aimem
       embedding_endpoint: databricks-bge-large-en

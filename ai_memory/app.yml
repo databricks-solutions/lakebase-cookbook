@@ -7,7 +7,7 @@ env:
   - name: PGDATABASE
     value: "databricks_postgres"
   - name: LAKEBASE_SCHEMA
-    value: "public"
+    value: "aimem"
   # Lakebase database instance name (used to mint OAuth credentials).
   - name: LAKEBASE_INSTANCE
     value: "<your-lakebase-instance-name>"

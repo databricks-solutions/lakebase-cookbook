@@ -18,8 +18,8 @@ build/
 .databricks/
 .bundle/
 
-# Chainlit local state
-.chainlit/.langchain.db
+# Chainlit auto-generated local config/translations/state
+.chainlit/
 .files/
 
 # Testing

@@ -1,15 +1,16 @@
-"""Three-layer agent memory on Lakebase Postgres.
+"""Long-term agent memory on Lakebase Postgres (facts + semantic recall).
 
-* **Short-term** — ``add_turn`` / ``recent_turns``: raw conversation history for a
-  (user, session), the working context window.
 * **Long-term facts** — ``remember`` / ``list_memories``: durable facts about a
   user ("prefers metric units", "team = finance"), persisted across sessions.
 * **Semantic recall** — ``recall``: pgvector cosine-similarity lookup that
   returns the memories most relevant to the current query, to inject into the
   prompt.
 
-All three share one governed Postgres store. Embeddings come from a Databricks
-Foundation Model endpoint (see ``embeddings.py``).
+Short-term conversation history (the working context window, the thread
+sidebar, and resume) is handled separately by Chainlit's SQLAlchemy data layer
+on the same Lakebase database — see ``db.create_chainlit_data_layer``.
+
+Embeddings come from a Databricks Foundation Model endpoint (``embeddings.py``).
 """
 
 from __future__ import annotations
@@ -33,33 +34,6 @@ class MemoryStore:
         self._engine = engine
         self._embedder = embedder
         self._schema = schema
-
-    # --- short-term: conversation history -----------------------------------
-
-    def add_turn(self, user_id: str, session_id: str, role: str, content: str) -> None:
-        with self._engine.begin() as conn:
-            conn.execute(
-                text(
-                    f'INSERT INTO "{self._schema}".conversations '
-                    "(user_id, session_id, role, content) "
-                    "VALUES (:u, :s, :r, :c)"
-                ),
-                {"u": user_id, "s": session_id, "r": role, "c": content},
-            )
-
-    def recent_turns(self, user_id: str, session_id: str, limit: int = 10) -> list[Memory]:
-        with self._engine.connect() as conn:
-            rows = conn.execute(
-                text(
-                    f"SELECT id, role || ': ' || content AS content "
-                    f'FROM "{self._schema}".conversations '
-                    "WHERE user_id = :u AND session_id = :s "
-                    "ORDER BY created_at DESC LIMIT :n"
-                ),
-                {"u": user_id, "s": session_id, "n": limit},
-            ).fetchall()
-        # Return in chronological order.
-        return [Memory(id=r.id, content=r.content) for r in reversed(rows)]
 
     # --- long-term: durable facts --------------------------------------------
 
