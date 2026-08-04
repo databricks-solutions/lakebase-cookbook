@@ -32,11 +32,11 @@ export const RESOURCES: Resource[] = [
       'How to create and manage Postgres roles for users and service principals against a Lakebase project.',
   },
   {
-    title: 'Genie Caching example',
+    title: 'FastAPI on Lakebase example',
     type: 'Code sample',
     category: 'Apps',
-    url: 'https://github.com/databricks-solutions/lakebase-cookbook/tree/main/genie_caching',
+    url: 'https://github.com/databricks-solutions/lakebase-cookbook/tree/main/apps/lakebase-fastapi',
     summary:
-      'A Databricks App that fronts Genie with a Lakebase (pgvector) semantic query cache, deployable via Asset Bundles.',
+      'A Databricks App that serves a Lakebase synced table through a FastAPI REST API, with OAuth token rotation and scale-to-zero-aware pooling.',
   },
 ];

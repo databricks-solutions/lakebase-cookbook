@@ -1,7 +1,8 @@
 ---
 title: AI Memory — durable agent memory on Lakebase
 sidebar_label: AI Memory
-sidebar_position: 20
+category: Agents
+sidebar_position: 12
 description: Persistent short-term, long-term, and semantic agent memory backed by Lakebase Postgres and pgvector.
 ---
 import Callout from '../../../components/Callout.astro';
@@ -72,6 +73,7 @@ available; `CREATE` on the target schema granted to the app service principal
 </Callout>
 
 ```bash
+cd agents/ai_memory
 databricks bundle validate -t demo
 databricks bundle deploy -t demo \
   --var lakebase_branch="projects/<project>/branches/<branch>" \
@@ -94,5 +96,5 @@ fact, and later questions will recall it automatically.
 
 <Callout type="note" title="Source">
 The full example lives in
-[`ai_memory/`](https://github.com/databricks-solutions/lakebase-cookbook/tree/main/ai_memory).
+[`agents/ai_memory/`](https://github.com/databricks-solutions/lakebase-cookbook/tree/main/agents/ai_memory).
 </Callout>

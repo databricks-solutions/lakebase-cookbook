@@ -7,7 +7,7 @@ repo, deployable by anyone, and documented on
 
 There are two deliverables for every contribution:
 
-1. **The example** — a self-contained, deployable project in a top-level folder.
+1. **The example** — a self-contained, deployable project in a category folder.
 2. **The doc page** — a Markdown page on the cookbook site that explains it.
 
 Both are required. An example without a doc page won't be discoverable; a doc
@@ -58,17 +58,20 @@ step by hand — the skills are a convenience, not a requirement.
 
 ## 1. Create the example folder
 
-Add a new **top-level folder** named in `snake_case` (matching the existing
-`ai_memory/`, `apps/`, `feature_store/`, `reverse_etl/`, `genie_caching/`). Use
-the fully worked [`genie_caching/`](genie_caching/) example as your reference for
-structure.
+Add your example as a `snake_case` folder **inside the category it belongs to**.
+Examples are grouped into category folders — the current ones are
+[`agents/`](agents/), [`apps/`](apps/), [`developer_experience/`](developer_experience/),
+and [`data/`](data/). Put your example under the best-fit category (e.g.
+`agents/my_example/`); if none fits, propose a new category folder in your issue
+or PR. Use the fully worked [`apps/lakebase-fastapi/`](apps/lakebase-fastapi/)
+example as your reference for structure.
 
 ### Required files
 
 Every example folder must contain:
 
 ```
-your_example/
+<category>/your_example/    # e.g. agents/your_example/
 ├── README.md              # how the example works + how to deploy (see §2)
 ├── databricks.yml         # DAB bundle definition (see §3)
 ├── resources/             # DAB resource YAMLs (app, jobs, pipelines, etc.)
@@ -99,7 +102,7 @@ baseline.
 
 Each example's `README.md` is the deep, source-of-truth documentation. The
 cookbook site page (§4) is a shorter, styled mirror of it. Structure it like
-[`genie_caching/README.md`](genie_caching/README.md):
+[`apps/lakebase-fastapi/README.md`](apps/lakebase-fastapi/README.md):
 
 1. **Title + one-paragraph summary** — what it does and why you'd use it.
 2. **Features / what you get** — a short table.
@@ -119,7 +122,7 @@ example. Spell out every prerequisite and every variable they must set.
 ## 3. Make it deployable with Databricks Asset Bundles
 
 All resources deploy via DABs. Model your `databricks.yml` on
-[`genie_caching/databricks.yml`](genie_caching/databricks.yml):
+[`apps/lakebase-fastapi/databricks.yml`](apps/lakebase-fastapi/databricks.yml):
 
 - Give the bundle a unique `name`.
 - Put each resource (app, job, pipeline, dashboard…) in its own file under
@@ -159,13 +162,14 @@ under `examples/` **appear in the sidebar automatically**. See
 Create `site/src/content/docs/examples/<your-example>.mdx` (use `.mdx` if you
 want the `<Callout>` component; plain `.md` is fine otherwise). Copy the
 frontmatter shape from an existing page such as
-[`genie-caching.mdx`](site/src/content/docs/examples/genie-caching.mdx):
+[`lakebase-fastapi.mdx`](site/src/content/docs/examples/lakebase-fastapi.mdx):
 
 ```mdx
 ---
 title: Your Example — one-line descriptor
 sidebar_label: Your Example        # short label for the sidebar
-sidebar_position: 60               # ordering; lower = higher in the list
+category: Agents                   # groups the example under a category
+sidebar_position: 13               # ordering within the category
 description: One sentence for SEO and social cards.
 ---
 import Callout from '../../../components/Callout.astro';
@@ -177,14 +181,18 @@ how to deploy, and configuration highlights.
 
 <Callout type="note" title="Source">
 The full example lives in
-[`your_example/`](https://github.com/databricks-solutions/lakebase-cookbook/tree/main/your_example).
+[`<category>/your_example/`](https://github.com/databricks-solutions/lakebase-cookbook/tree/main/<category>/your_example).
 </Callout>
 ```
 
 Notes:
 
-- **`sidebar_position`** controls order; existing examples use 10, 20, 30, …
-  Pick a value that slots your example where it belongs.
+- **`category`** groups the example in the sidebar and on the landing page. Use
+  the same category as your folder (Agents, Developer Experience, Apps, Data);
+  category order lives in `src/lib/docs.ts` and `src/data/examples.ts`.
+- **`sidebar_position`** controls order *within* the category; examples use the
+  category's number band (Agents 10s, Developer Experience 20s, Apps 30s,
+  Data 40s). Pick a value that slots your example where it belongs.
 - Convert any Docusaurus-style `:::note … :::` admonitions to
   `<Callout type="info|note|tip|warning" title="…">…</Callout>`.
 - **No emojis** in doc pages.
@@ -193,9 +201,10 @@ Notes:
 ### 4b. Feature it on the landing / index pages
 
 - **Landing page + docs index:** add an entry to
-  [`site/src/data/examples.ts`](site/src/data/examples.ts) (`tag`, `title`,
-  `bracket`, `description`, `href`, `status`). Set `status: 'ready'` once it's
-  fully worked, or `'soon'` for a stub.
+  [`site/src/data/examples.ts`](site/src/data/examples.ts) (`category`, `tag`,
+  `title`, `bracket`, `description`, `href`, `status`) — use the same `category`
+  as the doc-page frontmatter. Set `status: 'ready'` once it's fully worked, or
+  `'soon'` for a stub.
 - **Docs index table:** add a row to
   [`site/src/content/docs/intro.md`](site/src/content/docs/intro.md).
 - If your example warrants it, you can also add a card to
@@ -239,7 +248,7 @@ Your PR should include, in the description:
 
 ### PR checklist
 
-- [ ] New top-level `snake_case/` example folder with the required files (§1).
+- [ ] New `snake_case/` example folder under a category dir with the required files (§1).
 - [ ] Deployable via DABs; all workspace-specific values are variables (§3).
 - [ ] Small/cheap database and compute configuration.
 - [ ] No secrets committed; `.env.example` provided; real files `.gitignore`d.

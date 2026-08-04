@@ -1,4 +1,5 @@
 export interface ExampleCard {
+  category: string;
   tag: string;
   title: string;
   bracket: string;
@@ -7,17 +8,18 @@ export interface ExampleCard {
   status: 'ready' | 'soon';
 }
 
+// Order categories appear on the landing page. Categories not listed fall to
+// the end. Keep in sync with CATEGORY_POSITIONS in src/lib/docs.ts.
+export const CATEGORY_ORDER = [
+  'Agents',
+  'Developer Experience',
+  'Apps',
+  'Data',
+];
+
 export const EXAMPLES: ExampleCard[] = [
   {
-    tag: 'Genie Caching',
-    title: 'Semantic cache in front of Genie',
-    bracket: 'pgvector similarity, per-gateway TTL, Genie-compatible REST + MCP',
-    description:
-      'A Databricks App that fronts Genie with a Lakebase pgvector cache. Repeated or semantically similar questions skip NL→SQL and reuse cached SQL against your warehouse for fresher numbers with less work.',
-    href: '/docs/examples/genie-caching/',
-    status: 'ready',
-  },
-  {
+    category: 'Agents',
     tag: 'GraphRAG',
     title: 'Knowledge-graph RAG on Lakebase',
     bracket: 'pgvector seed, recursive-CTE graph traversal',
@@ -27,6 +29,17 @@ export const EXAMPLES: ExampleCard[] = [
     status: 'ready',
   },
   {
+    category: 'Agents',
+    tag: 'AI Memory',
+    title: 'Durable memory for agents',
+    bracket: 'Chainlit history + pgvector semantic recall',
+    description:
+      'Give an agent persistent memory on one Lakebase store: short-term conversation history via Chainlit’s data layer, long-term facts, and semantic recall over them with pgvector — the app owns its schema, so access survives redeploys.',
+    href: '/docs/examples/ai-memory/',
+    status: 'ready',
+  },
+  {
+    category: 'Developer Experience',
     tag: 'Branching CI/CD',
     title: 'Ship schema changes with confidence',
     bracket: 'branch-per-PR, AI impact review, exactly-once deploy',
@@ -36,15 +49,7 @@ export const EXAMPLES: ExampleCard[] = [
     status: 'ready',
   },
   {
-    tag: 'AI Memory',
-    title: 'Durable memory for agents',
-    bracket: 'Postgres-backed short- and long-term memory',
-    description:
-      'Give agents persistent, queryable memory backed by Lakebase Postgres — conversation history, facts, and embeddings on one governed store.',
-    href: '/docs/examples/ai-memory/',
-    status: 'ready',
-  },
-  {
+    category: 'Apps',
     tag: 'FastAPI App',
     title: 'FastAPI backend on Lakebase',
     bracket: 'Databricks App, OAuth rotation, scale-to-zero pooling',
@@ -54,6 +59,7 @@ export const EXAMPLES: ExampleCard[] = [
     status: 'ready',
   },
   {
+    category: 'Data',
     tag: 'Feature Store',
     title: 'Online feature serving',
     bracket: 'synced tables → model serving',
@@ -63,6 +69,7 @@ export const EXAMPLES: ExampleCard[] = [
     status: 'soon',
   },
   {
+    category: 'Data',
     tag: 'Reverse ETL',
     title: 'Lakehouse → operational store',
     bracket: 'managed sync, no custom pipelines',

@@ -2,10 +2,26 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import Button from '../components/Button.astro';
 import HeaderAnimation from '../components/HeaderAnimation.tsx';
-import { EXAMPLES } from '../data/examples';
+import { EXAMPLES, CATEGORY_ORDER, type ExampleCard } from '../data/examples';
 import { SITE } from '../config';
 
 const pad = (n: number) => String(n).padStart(2, '0');
+
+// Group examples by category, in CATEGORY_ORDER (unlisted categories last).
+const byCategory: { category: string; items: ExampleCard[] }[] = [];
+for (const ex of EXAMPLES) {
+  let bucket = byCategory.find((b) => b.category === ex.category);
+  if (!bucket) {
+    bucket = { category: ex.category, items: [] };
+    byCategory.push(bucket);
+  }
+  bucket.items.push(ex);
+}
+const catRank = (c: string) => {
+  const i = CATEGORY_ORDER.indexOf(c);
+  return i === -1 ? CATEGORY_ORDER.length : i;
+};
+byCategory.sort((a, b) => catRank(a.category) - catRank(b.category));
 ---
 
 <BaseLayout padded={false}>
@@ -52,39 +68,51 @@ const pad = (n: number) => String(n).padStart(2, '0');
       </h2>
     </div>
 
-    <div class="flex flex-col">
+    <div class="flex flex-col gap-14">
       {
-        EXAMPLES.map((ex, i) => (
-          <a
-            href={ex.href}
-            class="group grid grid-cols-1 gap-4 border-t border-[var(--color-line)] py-9 transition-colors last:border-b hover:bg-[var(--color-band)] md:grid-cols-[auto_1fr_auto] md:items-baseline md:gap-10"
-          >
-            <div class="mono-label text-[var(--color-muted)] md:pt-1">
-              {pad(i + 1)}
-            </div>
-            <div>
-              <div class="mb-2 flex items-center gap-3">
-                <span class="tag-chip">{ex.tag}</span>
-                {ex.status === 'soon' && (
-                  <span class="mono-label text-[0.65rem] text-[var(--color-muted)]">
-                    Coming soon
-                  </span>
-                )}
-              </div>
-              <h3 class="text-2xl font-light tracking-tight text-[var(--color-ink)] sm:text-3xl">
-                {ex.title}
+        byCategory.map((bucket) => (
+          <div>
+            <div class="mb-2 flex items-baseline gap-3 border-b-2 border-[var(--color-ink)] pb-2">
+              <h3 class="text-xl font-normal tracking-tight text-[var(--color-ink)]">
+                {bucket.category}
               </h3>
-              <p class="mt-1 mono-label text-[0.7rem] font-normal normal-case tracking-normal text-[var(--color-muted)]">
-                <span class="bracket">{ex.bracket}</span>
-              </p>
-              <p class="mt-3 max-w-2xl text-[var(--color-muted)]">
-                {ex.description}
-              </p>
+              <span class="mono-label text-[0.65rem] text-[var(--color-muted)]">
+                {pad(bucket.items.length)}{' '}
+                {bucket.items.length === 1 ? 'example' : 'examples'}
+              </span>
             </div>
-            <div class="mono-label whitespace-nowrap text-[var(--color-lava-600)] opacity-0 transition-opacity group-hover:opacity-100 md:pt-1">
-              Read →
+            <div class="flex flex-col">
+              {bucket.items.map((ex) => (
+                <a
+                  href={ex.href}
+                  class="group grid grid-cols-1 gap-4 border-b border-[var(--color-line)] py-7 transition-colors hover:bg-[var(--color-band)] md:grid-cols-[1fr_auto] md:items-baseline md:gap-10"
+                >
+                  <div>
+                    <div class="mb-2 flex items-center gap-3">
+                      <span class="tag-chip">{ex.tag}</span>
+                      {ex.status === 'soon' && (
+                        <span class="mono-label text-[0.65rem] text-[var(--color-muted)]">
+                          Coming soon
+                        </span>
+                      )}
+                    </div>
+                    <h4 class="text-2xl font-light tracking-tight text-[var(--color-ink)] sm:text-3xl">
+                      {ex.title}
+                    </h4>
+                    <p class="mt-1 mono-label text-[0.7rem] font-normal normal-case tracking-normal text-[var(--color-muted)]">
+                      <span class="bracket">{ex.bracket}</span>
+                    </p>
+                    <p class="mt-3 max-w-2xl text-[var(--color-muted)]">
+                      {ex.description}
+                    </p>
+                  </div>
+                  <div class="mono-label whitespace-nowrap text-[var(--color-lava-600)] opacity-0 transition-opacity group-hover:opacity-100 md:pt-1">
+                    Read →
+                  </div>
+                </a>
+              ))}
             </div>
-          </a>
+          </div>
         ))
       }
     </div>

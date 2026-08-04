@@ -73,14 +73,15 @@ gitignored.
 
 Confirm the example folder has: `README.md`, `databricks.yml`, `resources/*.yml`,
 `pyproject.toml` (uv), `.env.example`, `.gitignore`. Confirm the folder name is
-`snake_case` and lives at the repo root.
+`snake_case` and lives under a category dir (e.g. `agents/`, `apps/`,
+`developer_experience/`, `data/`).
 
 ## Output: the PR checklist
 
 Finish by printing the CONTRIBUTING §6 checklist with each box **checked** or
 **flagged with what's missing**:
 
-- [ ] New top-level `snake_case/` example folder with required files
+- [ ] New `snake_case/` example folder under a category dir with required files
 - [ ] Deployable via DABs; all workspace-specific values are variables
 - [ ] Small/cheap database and compute configuration
 - [ ] No secrets committed; `.env.example` provided; real files gitignored

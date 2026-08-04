@@ -1,7 +1,8 @@
 ---
 title: GraphRAG on Lakebase
 sidebar_label: GraphRAG
-sidebar_position: 15
+category: Agents
+sidebar_position: 11
 description: Knowledge-graph-augmented RAG served entirely from Lakebase — pgvector semantic seed plus recursive-CTE graph traversal.
 ---
 import Callout from '../../../components/Callout.astro';
@@ -42,6 +43,59 @@ primitives (`vector`, `ltree`, `pg_trgm`). It's great for bounded k-hop
 operational retrieval, not a billion-edge graph-analytics engine.
 </Callout>
 
+## The graph schema
+
+Three tables under a `graph` schema hold everything ([`sql/schema.sql`](https://github.com/databricks-solutions/lakebase-cookbook/tree/main/agents/graphrag/sql/schema.sql)):
+
+| Table | Key columns | Notes |
+|-------|-------------|-------|
+| `graph.nodes` | `node_id TEXT PK`, `node_type`, `name`, `props JSONB`, `path LTREE` | Business-key ids (`product:122`, `supplier:S2`); `props` holds type-specific attributes; optional `ltree` path for hierarchy rollups (`us.northeast.boston`). Trigram + GiST indexes for fuzzy name and path lookups. |
+| `graph.edges` | PK `(src_id, dst_id, rel)`, `props JSONB` | The composite key dedupes relationships. Relations: `SUPPLIED_BY`, `LOCATED_IN`, `BELONGS_TO`, `SUBSTITUTE_FOR`, `SURGES_IN`. Indexed both directions (`edges_src_rel_idx`, `edges_dst_rel_idx`). |
+| `graph.node_embeddings` | `node_id TEXT PK`, `embedding VECTOR(1024)` | 1024-dim to match `databricks-gte-large-en`. HNSW index: `vector_cosine_ops` with `m = 16, ef_construction = 64`. |
+
+## How retrieval works
+
+The [retrieval SQL](https://github.com/databricks-solutions/lakebase-cookbook/tree/main/agents/graphrag/sql/graphrag_retrieval.sql) is three stages in one statement:
+
+1. **Semantic seed** — an HNSW ANN scan finds the entry nodes closest to the
+   question embedding, ordered by `embedding <=> :query_embedding` (pgvector's
+   `<=>` is cosine *distance*, so `similarity = 1 - distance`). Cosine is used
+   because embeddings are direction-, not magnitude-, meaningful.
+2. **Graph expansion** — a `WITH RECURSIVE` walk follows edges out from each seed
+   up to `:max_hops` (typically 2 — "two degrees of separation"). Edges are first
+   materialized in **both directions** (`UNION ALL` of forward and reverse) so an
+   undirected relation like `SUBSTITUTE_FOR` traverses either way. A per-path
+   `visited` array guards against cycles.
+3. **Blended ranking** — each reachable node is scored
+
+   ```
+   graph_score = MAX(seed_similarity × 0.5 ^ hop)
+   ```
+
+   The `0.5 ^ hop` decay halves a node's contribution per hop, so a direct
+   neighbor of a strong seed outranks a distant one; `MAX` means a node reachable
+   from several seeds keeps its *strongest* path. The top 25 by `graph_score` (with
+   the relationship types traversed) become the LLM context.
+
+This is the GraphRAG win: a supplier or substitute that shares no keywords with
+the question still surfaces because it's one hop from a semantically-matched node
+— something flat vector RAG never retrieves.
+
+## Building the graph safely
+
+`assemble_graph()` in [`graph_build.py`](https://github.com/databricks-solutions/lakebase-cookbook/tree/main/agents/graphrag/graph_build.py)
+is a pure function that turns rows + LLM enrichment into `(nodes, edges)`. Its
+`add_edge()` **only adds an edge if both endpoints exist** — so hallucinated
+substitute ids or orphaned supply rows are dropped and logged rather than
+creating dangling references. Undirected `SUBSTITUTE_FOR` edges are stored once
+(endpoints sorted) to avoid duplicates.
+
+The retrieval and build logic is validated entirely offline by
+[`smoketest/graphrag_logic_smoketest.py`](https://github.com/databricks-solutions/lakebase-cookbook/tree/main/agents/graphrag/smoketest/graphrag_logic_smoketest.py)
+— 25+ assertions (on DuckDB, no Lakebase or model endpoint needed) covering the
+semantic seed, graph expansion surfacing context flat RAG misses, the
+dangling-edge guard, `0.5^hop` score decay, and the `max_hops` depth bound.
+
 ## Deploy with Asset Bundles
 
 Prerequisites: a Databricks workspace with **Lakebase (Autoscaling)** enabled, a
@@ -49,7 +103,7 @@ model-serving **embeddings** endpoint and a **chat** endpoint registered, plus
 the `databricks` CLI and `uv`.
 
 ```bash
-cd graphrag
+cd agents/graphrag
 databricks bundle deploy -t dev \
   --var lakebase_database="projects/<project>/branches/<branch>/databases/<id>"
 databricks bundle run graphrag_build -t dev
@@ -62,20 +116,22 @@ Lakebase, and queries it. The two Lakebase I/O cells are scaffolding you complet
 fully validated offline by the smoke test:
 
 ```bash
-cd graphrag
+cd agents/graphrag
 uv run --python 3.11 --with duckdb --with numpy smoketest/graphrag_logic_smoketest.py
 ```
 
-## Configuration
+## Configuration and tuning
 
 | Variable / setting | Purpose |
 |--------------------|---------|
 | `lakebase_database` | Full Lakebase database resource path (required). |
-| `max_hops` | Bounds how far the recursive CTE traverses out from the seed nodes. |
+| `max_hops` | Traversal depth from the seeds. `2` is the sweet spot; higher pulls in more distant (and lower-scored) context at the cost of a wider recursive walk. |
+| `VECTOR(1024)` | Embedding dimension — must match your embeddings endpoint (1024 for `databricks-gte-large-en`). |
+| HNSW `m` / `ef_construction` | Index build quality vs. speed (`16` / `64` here). Raise for higher recall on larger graphs. |
 | Embeddings endpoint | Model-serving endpoint used to embed nodes and questions. |
 | Chat endpoint | Model-serving endpoint used to synthesize the final answer. |
 
 <Callout type="note" title="Source">
 The full example lives in
-[`graphrag/`](https://github.com/databricks-solutions/lakebase-cookbook/tree/main/graphrag).
+[`agents/graphrag/`](https://github.com/databricks-solutions/lakebase-cookbook/tree/main/agents/graphrag).
 </Callout>

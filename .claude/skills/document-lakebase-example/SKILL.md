@@ -28,12 +28,15 @@ in [`site/`](../../../site/) — see [`site/README.md`](../../../site/README.md)
 
 Create `site/src/content/docs/examples/<slug>.mdx` from this skill's
 [`templates/example.mdx.tmpl`](templates/example.mdx.tmpl). Substitute
-`__TITLE__`, `__SIDEBAR_LABEL__`, `__DESCRIPTION__`, `__NAME__`, `__SLUG__`, and
-`__SIDEBAR_POSITION__`.
+`__TITLE__`, `__SIDEBAR_LABEL__`, `__CATEGORY__`, `__DESCRIPTION__`, `__NAME__`,
+`__SLUG__`, and `__SIDEBAR_POSITION__`.
 
-- **`sidebar_position`** orders the sidebar; existing examples use 10, 20, 30…
-  Read the other files in `site/src/content/docs/examples/` and pick a value that
-  slots this example where it belongs. (`genie-caching` = 10.)
+- **`category`** groups the example in the sidebar and on the landing page. Use
+  the same category as the example's folder — current categories are Agents,
+  Developer Experience, Apps, Data (order lives in `site/src/lib/docs.ts`).
+- **`sidebar_position`** orders *within* the category; use the category's number
+  band (Agents 10s, Developer Experience 20s, Apps 30s, Data 40s). Read the other
+  files in `site/src/content/docs/examples/` and pick a value that fits.
 - Use `.mdx` (not `.md`) if you use the `<Callout>` component. Import it from
   `../../../components/Callout.astro`.
 - Convert any Docusaurus-style `:::note … :::` admonitions to
@@ -50,10 +53,10 @@ needed.
 ### 2. Feature it in the landing + docs index data
 
 - **`site/src/data/examples.ts`** — append an `ExampleCard` entry:
-  `{ tag, title, bracket, description, href: '/docs/examples/<slug>/', status }`.
-  Use `status: 'ready'` for a fully worked example, `'soon'` for a stub. Match
-  the tone of the existing entries (the `bracket` field is the short mono
-  `[like this]` phrase).
+  `{ category, tag, title, bracket, description, href: '/docs/examples/<slug>/', status }`.
+  Use the same `category` as the doc-page frontmatter. Use `status: 'ready'` for
+  a fully worked example, `'soon'` for a stub. Match the tone of the existing
+  entries (the `bracket` field is the short mono `[like this]` phrase).
 - **`site/src/content/docs/intro.md`** — add a row to the examples table
   pointing at `/docs/examples/<slug>/`.
 - Optionally add a card to **`site/src/data/resources.ts`** if it warrants a

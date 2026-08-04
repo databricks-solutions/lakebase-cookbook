@@ -1,7 +1,8 @@
 ---
 title: FastAPI backend on Lakebase
 sidebar_label: FastAPI App
-sidebar_position: 30
+category: Apps
+sidebar_position: 31
 description: A Databricks App that serves a Lakebase synced table through a FastAPI REST API, with OAuth token rotation and scale-to-zero-aware connection pooling.
 ---
 import Callout from '../../../components/Callout.astro';
@@ -47,6 +48,63 @@ Client ──HTTP──▶ Databricks App (FastAPI, async)
   and recycling ages out the rest below the token lifetime.
 - **Static API surface** — data endpoints are always registered and return `503`
   until the database engine is initialized (no restart needed).
+
+## Connecting to Lakebase: the hard parts
+
+The interesting engineering is in [`src/core/database.py`](https://github.com/databricks-solutions/lakebase-cookbook/tree/main/apps/lakebase-fastapi/src/core/database.py),
+which handles the two things that make Lakebase different from a always-on
+Postgres: **credentials expire**, and **the endpoint sleeps**.
+
+**Token rotation.** A Lakebase OAuth credential is used as the Postgres password
+and lasts ~60 minutes. Rather than let connections fail, the app runs three
+layers of defense:
+
+| Constant | Value | Role |
+|----------|-------|------|
+| `TOKEN_LIFETIME_SECONDS` | `3600` | Assumed credential lifetime |
+| `REFRESH_AT_SECONDS` | `2700` (45 min) | A background task proactively re-mints the token here |
+| `REFRESH_RETRY_BACKOFF` | `[5, 15, 30, 60, 120]` | Retry schedule if a refresh attempt fails |
+
+On top of the background refresh, a SQLAlchemy `do_connect` hook injects the
+current token on every new connection and — as a safety net if the background
+task ever died — refreshes synchronously when the token is within a minute of the
+lifetime. Tokens are never logged.
+
+**Scale-to-zero-aware pool.** The endpoint suspends when idle, which silently
+kills pooled connections. The engine is tuned for that:
+
+| Setting | Value | Why |
+|---------|-------|-----|
+| `pool_pre_ping` | `True` | Validates each connection on checkout, so a connection killed by suspend is transparently replaced |
+| `pool_use_lifo` | `True` | Reuses hot connections first; idle ones age out instead of all staying warm |
+| `pool_recycle` | `2700` | Recycles connections below the token lifetime, so none outlives its credential |
+| `pool_size` / `max_overflow` | `5` / `10` | Base + burst capacity (per uvicorn worker) |
+| `pool_timeout` | `30` | Seconds to wait for a free connection before erroring |
+| `statement_timeout` | via `DB_COMMAND_TIMEOUT` | Set server-side per connection (`-c statement_timeout=…`) so a slow query can't hang a worker |
+
+**No hardcoded connection.** When deployed, the app's database binding injects
+`PGHOST`/`PGPORT`/`PGDATABASE`/`PGUSER`/`PGSSLMODE`, and only `ENDPOINT_NAME` comes
+from the bundle. The resolver falls back gracefully — explicit `ENDPOINT_NAME`,
+then self-deriving from the app's own binding, then a legacy project/branch/
+endpoint triple — so the same code runs locally (as your identity) and deployed
+(as the app service principal) with no edits.
+
+## Provisioning and least-privilege access
+
+One `databricks bundle deploy` ([`databricks.yml`](https://github.com/databricks-solutions/lakebase-cookbook/tree/main/apps/lakebase-fastapi/databricks.yml))
+creates every resource: a `pg_version: 17` autoscaling project (0.5–4 CU,
+suspend after 300s), a long-lived `production` branch, a READ_WRITE `primary`
+endpoint, a Postgres-backed UC catalog, and a **synced table**
+(`samples.tpch.orders` → `public.orders_synced`, keyed on `o_orderkey`,
+`SNAPSHOT` scheduling — so it's read-only and overwritten each sync).
+
+The app binds to the database with `CAN_CONNECT_AND_CREATE` (enough to mint a
+token), but that is *not* table access. A post-deploy hook
+([`scripts/grant_app_access.py`](https://github.com/databricks-solutions/lakebase-cookbook/tree/main/apps/lakebase-fastapi/scripts/grant_app_access.py)),
+run as the deployer (a superuser), grants the app's service principal only
+`USAGE` on the schema and `SELECT` on the synced table — it polls up to ~90s for
+the table to finish provisioning first. The app SP never gets `CAN MANAGE` or
+superuser, which is why the API is strictly read-only over the synced table.
 
 ## Deploy with Asset Bundles
 
