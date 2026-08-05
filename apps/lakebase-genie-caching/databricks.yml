@@ -1,0 +1,298 @@
+bundle:
+  name: lakebase_genie_caching
+
+# Variables without a `default` are REQUIRED. Supply them per target below, on the
+# command line (`--var warehouse_id=...`), or in a .databricks/bundle/<target>/variable-overrides.json.
+# `databricks bundle validate` fails with the variable name if one is missing.
+variables:
+  warehouse_id:
+    description: >
+      REQUIRED. SQL warehouse ID for Genie queries and cached SQL execution.
+      Find it in the warehouse's Connection details tab, or via
+      `databricks warehouses list --profile <profile>`.
+  genie_space_ids:
+    description: >
+      REQUIRED. Comma-separated Genie space IDs (titles auto-resolved at startup).
+      A space ID is the 32-hex segment of its URL:
+      /genie/rooms/<space_id>. At least one is needed.
+  trace_archive_catalog:
+    description: >
+      REQUIRED. Unity Catalog catalog holding the trace archive table. The deployer
+      needs USE CATALOG plus CREATE TABLE on the schema below.
+  trace_archive_schema:
+    description: REQUIRED. Unity Catalog schema for the trace archive table.
+  lakebase_project:
+    description: >
+      Lakebase Autoscaling project name. Created by this bundle if absent.
+      IMPORTANT: `bundle destroy` SOFT-deletes the project and holds its name for
+      a 7-day retention window (see purge_time on the deleted project). Deploying
+      again inside that window appears to succeed but does NOT recreate it, and
+      the app comes up with no cache, memory, or sessions. If you destroy and
+      redeploy, set a NEW name here.
+    default: lakebase-genie-caching
+  mlflow_experiment_name:
+    description: MLflow experiment path for tracing
+    default: /lakebase-genie-caching
+  trace_archive_table:
+    description: Unity Catalog table for archived MLflow traces
+    default: mlflow_traces_archived
+  classifier_llm_endpoint:
+    description: Fast cheap LLM for intent classification and validation (Haiku)
+    default: databricks-claude-haiku-4-5
+  assistant_llm_endpoint:
+    description: Main LLM for summarization, morphing, rewriting, assistant (Sonnet)
+    default: databricks-claude-sonnet-4
+
+sync:
+  exclude:
+    - .venv/
+    - .git/
+    - __pycache__/
+    - "*.pyc"
+    - .pytest_cache/
+    - frontend/node_modules/
+    - frontend/src/
+    - frontend/package-lock.json
+    - frontend/tsconfig*.json
+    - frontend/vite.config.ts
+    - frontend/index.html
+    - frontend/package.json
+    - tests/
+    - "*.pem"
+
+resources:
+  postgres_projects:
+    genie_cache_db:
+      project_id: ${var.lakebase_project}
+      display_name: ${var.lakebase_project}
+      pg_version: 17
+
+  experiments:
+    genie_cache_experiment:
+      name: ${var.mlflow_experiment_name}
+
+  apps:
+    genie_cache:
+      name: lakebase-genie-caching
+      description: >
+        Lakebase Genie Caching: semantic cache, user memory, and multi-agent
+        orchestration for Databricks Genie Spaces.
+      source_code_path: .
+
+      # On-behalf-of user authorization. The app forwards the caller's OAuth
+      # token so Genie calls and cached SQL execute as *them*, letting Unity
+      # Catalog decide which rows they can see -- rather than everyone inheriting
+      # the app service principal's access.
+      #
+      # Without these scopes the forwarded token is rejected with
+      # "403 Invalid scope, required scopes: genie" and every data query fails.
+      # A workspace admin must also have user authorization enabled, and each
+      # user consents on first use.
+      # Note the scope is `genie`, not `dashboards.genie`: the Apps API accepts
+      # both strings, but the Genie Conversation API rejects a token that only
+      # carries `dashboards.genie` with "403 Invalid scope, required scopes:
+      # genie". Both are listed so either enforcement path is satisfied.
+      user_api_scopes:
+        - sql
+        - genie
+        - dashboards.genie
+
+      config:
+        command:
+          - uvicorn
+          - agent_server.start_server:app
+          - --host=0.0.0.0
+          - --port=8000
+        env:
+          - name: LOG_LEVEL
+            value: INFO
+          - name: LAKEBASE_PROJECT
+            value: ${var.lakebase_project}
+          - name: MLFLOW_TRACKING_URI
+            value: databricks
+          # Pass the bundle-created experiment's ID, not just its name. In
+          # development mode the bundle prefixes resource names (e.g.
+          # "[dev alice] lakebase-genie-caching"), so an app told only the bare name
+          # looks for an experiment that does not exist and tries to CREATE one at
+          # the workspace root -- which the app's service principal has no
+          # permission to do, failing with PERMISSION_DENIED on aclPath /workspace
+          # and leaving tracing degraded.
+          - name: MLFLOW_EXPERIMENT_ID
+            value: ${resources.experiments.genie_cache_experiment.id}
+          - name: MLFLOW_EXPERIMENT_NAME
+            value: ${var.mlflow_experiment_name}
+          - name: SQL_WAREHOUSE_ID
+            value: ${var.warehouse_id}
+          - name: GENIE_SPACE_IDS
+            value: ${var.genie_space_ids}
+          - name: TRACE_ARCHIVE_CATALOG
+            value: ${var.trace_archive_catalog}
+          - name: TRACE_ARCHIVE_SCHEMA
+            value: ${var.trace_archive_schema}
+          - name: TRACE_ARCHIVE_TABLE
+            value: ${var.trace_archive_table}
+          - name: BATCH_JOB_NAME
+            value: lakebase-genie-caching-batch
+          - name: CLASSIFIER_LLM_ENDPOINT
+            value: ${var.classifier_llm_endpoint}
+          - name: ASSISTANT_LLM_ENDPOINT
+            value: ${var.assistant_llm_endpoint}
+      resources:
+        - name: sql-warehouse
+          sql_warehouse:
+            id: ${var.warehouse_id}
+            permission: CAN_USE
+
+        - name: embedding-endpoint
+          serving_endpoint:
+            name: databricks-gte-large-en
+            permission: CAN_QUERY
+
+        - name: classifier-llm-endpoint
+          serving_endpoint:
+            name: ${var.classifier_llm_endpoint}
+            permission: CAN_QUERY
+
+        - name: assistant-llm-endpoint
+          serving_endpoint:
+            name: ${var.assistant_llm_endpoint}
+            permission: CAN_QUERY
+
+        - name: mlflow-experiment
+          experiment:
+            experiment_id: ${resources.experiments.genie_cache_experiment.id}
+            permission: CAN_MANAGE
+
+        - name: batch-job
+          job:
+            id: ${resources.jobs.batch_pipelines.id}
+            permission: CAN_MANAGE_RUN
+
+        - name: trace-archive-job
+          job:
+            id: ${resources.jobs.trace_archive.id}
+            permission: CAN_MANAGE_RUN
+
+  jobs:
+    trace_archive:
+      name: "[${resources.experiments.genie_cache_experiment.id}] Trace Archive Job"
+      description: >
+        Archive MLflow traces into Delta for offline cache and memory pipelines.
+      max_concurrent_runs: 1
+      tags:
+        project: lakebase-genie-caching
+        type: trace-archive
+      schedule:
+        quartz_cron_expression: "0 0 * * * ?"
+        timezone_id: UTC
+        pause_status: UNPAUSED
+      tasks:
+        - task_key: archive_wheel
+          python_wheel_task:
+            package_name: databricks_agents_monitoring
+            entry_point: archive_job
+            named_parameters:
+              experiment_id: ${resources.experiments.genie_cache_experiment.id}
+              fetch_traces_batch_size: "500"
+              fetch_traces_page_size: "500"
+              fetch_traces_rps_limit: "1"
+              min_lookback_minutes: "120"
+              trace_archive_table_fullname: "`${var.trace_archive_catalog}`.`${var.trace_archive_schema}`.`${var.trace_archive_table}`"
+          environment_key: archive_wheel_environment
+      environments:
+        - environment_key: archive_wheel_environment
+          spec:
+            client: "4"
+            dependencies:
+              - https://ml-team-public-read.s3.us-west-2.amazonaws.com/wheels/agents-archive/prod/databricks_agents_monitoring-0.3.0-py3-none-any.whl
+
+    batch_pipelines:
+      name: lakebase-genie-caching-batch
+      description: >
+        Batch job that reads traces, promotes cache entries from thumbs-up
+        feedback, extracts user memories, and runs eviction.
+      max_concurrent_runs: 1
+      timeout_seconds: 1800
+      schedule:
+        quartz_cron_expression: "0 */30 * * * ?"
+        timezone_id: UTC
+        pause_status: PAUSED
+      tags:
+        project: lakebase-genie-caching
+        type: batch-pipeline
+      tasks:
+        - task_key: archive_fresh
+          description: Trigger Trace Archive Job to pull latest MLflow traces into Delta
+          run_job_task:
+            job_id: ${resources.jobs.trace_archive.id}
+          timeout_seconds: 600
+
+        - task_key: batch_pipelines
+          description: Read archived traces, run cache/memory/eviction pipelines
+          depends_on:
+            - task_key: archive_fresh
+          spark_python_task:
+            python_file: jobs/batch_pipelines.py
+            parameters:
+              - --cache-limit
+              - "200"
+              - --memory-sessions
+              - "20"
+              - --lakebase-project
+              - ${var.lakebase_project}
+              - --warehouse-id
+              - ${var.warehouse_id}
+              - --genie-space-ids
+              - ${var.genie_space_ids}
+              - --trace-archive-catalog
+              - ${var.trace_archive_catalog}
+              - --trace-archive-schema
+              - ${var.trace_archive_schema}
+              - --trace-archive-table
+              - ${var.trace_archive_table}
+              - --mlflow-experiment-name
+              - ${var.mlflow_experiment_name}
+              # As with the app: pass the ID so the job does not depend on
+              # resolving a name the bundle may have prefixed.
+              - --mlflow-experiment-id
+              - ${resources.experiments.genie_cache_experiment.id}
+              - --classifier-llm-endpoint
+              - ${var.classifier_llm_endpoint}
+              - --assistant-llm-endpoint
+              - ${var.assistant_llm_endpoint}
+              - --workspace-source-root
+              - ${workspace.file_path}
+            source: WORKSPACE
+          environment_key: batch_env
+          timeout_seconds: 900
+      environments:
+        - environment_key: batch_env
+          spec:
+            client: "4"
+            dependencies:
+              - mlflow>=3.9.0
+              - psycopg[binary]>=3.2.0
+              - psycopg-pool>=3.2.0
+              - databricks-sdk>=0.89.0
+
+# Fill in the required variables for your own workspace. Both targets below are
+# templates -- the placeholder values are deliberately invalid so a copy-paste deploy
+# fails fast rather than pointing at someone else's workspace.
+targets:
+  dev:
+    mode: development
+    default: true
+    # No `host` here on purpose: the workspace comes from the CLI profile you pass
+    # (`--profile <name>`). Pinning a host in the file makes every deploy fail with
+    # a host-mismatch error unless the reader edits it first.
+
+  prod:
+    mode: production
+    workspace:
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
+    resources:
+      jobs:
+        batch_pipelines:
+          # Batch promotion runs on a schedule in prod; PAUSED by default in dev.
+          schedule:
+            pause_status: UNPAUSED

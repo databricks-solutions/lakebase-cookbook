@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+# Node
+frontend/node_modules/
+
+# Ignore dist everywhere except frontend/dist (needed for deployment)
+dist/
+!frontend/dist/
+
+# MLflow local runs
+mlruns/
+mlruns.db
+mlflow.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+.cursor/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+test-results/
+.pytest_cache/
+
+# Secrets / tokens
+.env
+*.pem
+
+# Databricks CLI/bundle local state. variable-overrides.json holds this
+# deployer's warehouse and Genie space IDs -- never commit it to a public repo.
+.databricks/
+

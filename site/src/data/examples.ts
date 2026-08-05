@@ -59,6 +59,16 @@ export const EXAMPLES: ExampleCard[] = [
     status: 'ready',
   },
   {
+    category: 'Apps',
+    tag: 'Genie Caching',
+    title: 'Semantic caching for Genie Spaces',
+    bracket: 'pgvector cache, multi-space routing, feedback loop',
+    description:
+      'A Databricks App that puts a pgvector semantic cache in front of Genie Spaces, so a reworded question re-executes the SQL that already worked instead of regenerating it — with per-user memory, supervisor routing across Spaces, and a feedback loop that promotes thumbs-up answers into the cache.',
+    href: '/docs/examples/lakebase-genie-caching/',
+    status: 'ready',
+  },
+  {
     category: 'Data',
     tag: 'Feature Store',
     title: 'Online feature serving',

@@ -23,6 +23,7 @@ for transactional workloads that sit alongside your lakehouse.
 | [Branching CI/CD](/docs/examples/branching-cicd/) | Validate schema changes on an isolated Lakebase branch in GitHub CI/CD, with an AI impact report per PR |
 | [AI Memory](/docs/examples/ai-memory/) | Short-term, long-term, and semantic (pgvector) agent memory on one Lakebase store |
 | [FastAPI App](/docs/examples/lakebase-fastapi/) | A Databricks App serving a Lakebase synced table through a FastAPI REST API |
+| [Genie Caching](/docs/examples/lakebase-genie-caching/) | A pgvector semantic cache in front of Genie Spaces, so reworded questions reuse SQL instead of regenerating it |
 | [Feature Store](/docs/examples/feature-store/) | Feature store integration |
 | [Reverse ETL](/docs/examples/reverse-etl/) | Reverse ETL patterns |
 
