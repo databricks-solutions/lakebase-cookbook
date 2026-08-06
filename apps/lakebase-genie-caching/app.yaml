@@ -1,0 +1,18 @@
+# Databricks Apps runtime entry point.
+#
+# Deliberately contains ONLY `command`. Every environment variable and resource
+# binding lives in databricks.yml under `resources.apps.genie_cache.config`,
+# which is the single source of truth: a bundle deploy's `config.env` overrides
+# anything set here (see the Databricks Asset Bundles resources reference).
+#
+# Keeping env vars out of this file stops one workspace's warehouse and Genie
+# space IDs from leaking into another workspace via a bare
+# `databricks apps deploy` that bypasses the bundle.
+#
+# Deploy with `databricks bundle deploy -t <target>` -- see README.md.
+
+command:
+  - uvicorn
+  - agent_server.start_server:app
+  - --host=0.0.0.0
+  - --port=8000

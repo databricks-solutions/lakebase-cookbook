@@ -1,0 +1,202 @@
+---
+title: Semantic caching for Genie Spaces
+sidebar_label: Genie Caching
+category: Apps
+sidebar_position: 32
+description: A Databricks App that puts a pgvector semantic cache in front of Genie Spaces, so repeat questions skip natural-language-to-SQL generation and return in a fraction of the time.
+---
+import Callout from '../../../components/Callout.astro';
+
+# Semantic caching for Genie Spaces
+
+A **Databricks App** that wraps one or more **Genie Spaces** with a semantic cache
+in **Lakebase (autoscaling Postgres + pgvector)**, per-user memory, and
+supervisor-routed orchestration across Spaces. Ask a question once and it goes to
+Genie; ask something semantically similar and the cached SQL is re-executed
+instead, skipping the slow natural-language-to-SQL step.
+
+Measured on a live deployment against two Genie Spaces: a fresh question took 36s
+through Genie, and the same question reworded returned in 7.9s at 95% similarity.
+A side-by-side A/B on one question showed 10.4s cached against 28.6s uncached.
+
+## Why cache Genie?
+
+Genie's cost is dominated by generating SQL from natural language, not by running
+the query. Two people asking the same question in different words pay that cost
+twice. A semantic cache keyed on embeddings recognises the second phrasing, reuses
+the SQL that already worked, and returns an answer several times faster.
+
+The cache is also a feedback loop: entries are promoted from questions users
+actually gave a thumbs-up to, so what gets cached is what the workspace found
+useful.
+
+## What the cache stores
+
+**SQL, never results.** No result set and no assistant answer text is persisted.
+Every cache hit re-executes the cached query, so what a caller sees is produced by
+the warehouse at request time rather than replayed from storage — the data stays
+current, and the query runs under the caller's identity when user authorization is
+enabled.
+
+<Callout type="note" title="Where Lakebase fits">
+Lakebase holds four things: the semantic cache (a `vector(1024)` column with an
+HNSW index for similarity search), per-user memory, conversation sessions, and the
+LangGraph checkpointer. All four are transactional, low-latency reads on the
+request path, which is what makes Postgres the right store rather than a warehouse.
+</Callout>
+
+## Architecture
+
+```
+                    ┌──────────────────────────────────────┐
+   Browser  ────────│  Databricks App                      │
+                    │                                      │
+                    │  React frontend                      │
+                    │      │  SSE + REST                   │
+                    │  FastAPI + MLflow AgentServer        │
+                    │      │                               │
+                    │  LangGraph supervisor pipeline       │
+                    └──────┬──────────────┬────────────────┘
+                           │              │
+              ┌────────────┘              └──────────────┐
+              │                                          │
+    ┌─────────▼──────────┐                   ┌───────────▼──────────┐
+    │ Lakebase Postgres  │                   │ Genie Spaces         │
+    │  + pgvector        │                   │ Foundation Models    │
+    │                    │                   │ SQL Warehouse        │
+    │ semantic cache     │                   └───────────┬──────────┘
+    │ user memory        │                               │
+    │ sessions           │                   ┌───────────▼──────────┐
+    │ checkpoints        │◄──────────────────│ MLflow traces        │
+    └────────────────────┘   feedback loop   │ Batch pipelines job  │
+                                             └──────────────────────┘
+```
+
+A question enters the LangGraph pipeline, where a fast classifier routes
+conversational messages to an assistant and data questions through memory
+retrieval, rewriting, and a supervisor. The supervisor decomposes multi-part
+questions into one sub-task per Genie Space and sends each through a three-tier
+cache check. Misses fall through to Genie, and MLflow records a trace. Offline, a
+scheduled job reads those traces and promotes thumbs-up answers into the cache.
+
+## Cache tiers
+
+| Tier | Similarity | Behaviour |
+|---|---|---|
+| **Tier 1 — direct hit** | >= 0.90 | Populate parameters, validate the SQL, execute |
+| **Tier 2 — SQL adaptation** | 0.75 – 0.90 | Extract new parameter values, substitute them into the cached SQL template, validate, execute |
+| **Tier 3 — miss** | < 0.75 | Fall through to Genie for fresh SQL |
+
+Both tiers validate the SQL before executing it, because similarity alone is not
+enough. "The 5 worst selling products" matches a cached "top 5 products by sales"
+template at 0.77, and parameter extraction happily pulls `top_count=5` — but the
+cached template sorts `DESC`, so substitution would return the best sellers
+labelled as the worst. Sort direction is not a parameter, so a fast model checks
+intent and the question falls through to Genie instead.
+
+## Deploy with Asset Bundles
+
+Prerequisites in your workspace:
+
+- Databricks CLI 0.298 or newer, authenticated
+- A running SQL warehouse
+- At least one Genie Space you can query
+- A Unity Catalog catalog and schema you can create tables in
+- Foundation Model endpoints available in your region
+  (`databricks-claude-sonnet-4`, `databricks-claude-haiku-4-5`,
+  `databricks-gte-large-en`)
+- Workspace admin rights for the one-time permission script
+
+Four variables have no defaults, so a missing one fails at validate time rather
+than pointing at the wrong workspace:
+
+```bash
+databricks bundle validate -t dev --profile <profile>
+
+databricks bundle deploy -t dev --profile <profile> \
+  --var warehouse_id=<warehouse-id> \
+  --var genie_space_ids=<space-id-1>,<space-id-2> \
+  --var trace_archive_catalog=<catalog> \
+  --var trace_archive_schema=<schema>
+
+databricks bundle run genie_cache -t dev --profile <profile>
+```
+
+The bundle creates the Lakebase project, the app, the MLflow experiment, and both
+jobs. Then grant the app's service principal access to Lakebase, the Genie Spaces,
+and their tables, and restart:
+
+```bash
+python scripts/setup_workspace.py --profile <profile> --target dev
+databricks bundle run genie_cache -t dev --profile <profile>
+```
+
+<Callout type="warning" title="Use bundle run, not apps start">
+`databricks apps start` restarts the app compute without re-applying the bundle's
+environment, so the app comes up missing its warehouse and Lakebase configuration
+and runs in a degraded mode with no cache. Always restart with
+`databricks bundle run`.
+</Callout>
+
+## Configuration
+
+| Variable | Required | Description |
+|---|---|---|
+| `warehouse_id` | yes | SQL warehouse for Genie queries and cached SQL |
+| `genie_space_ids` | yes | Comma-separated Genie Space IDs; titles are resolved from the API at startup |
+| `trace_archive_catalog` | yes | Unity Catalog catalog for the archived MLflow traces the offline pipeline reads |
+| `trace_archive_schema` | yes | Unity Catalog schema for the same |
+| `lakebase_project` | no | Lakebase autoscaling project, created by the bundle |
+| `mlflow_experiment_name` | no | MLflow experiment path |
+| `classifier_llm_endpoint` | no | Fast model for classification and SQL validation |
+| `assistant_llm_endpoint` | no | Main model for summarisation and rewriting |
+
+Thresholds and timeouts are tunable at runtime through an admin-only API and the
+app's config page, so you can experiment with the similarity bands without
+redeploying.
+
+## The cache starts empty
+
+Nothing is cached until a user gives an answer a thumbs-up and the offline job
+runs. That is the intended flow:
+
+1. Ask a question — it misses, goes to Genie, and MLflow records a trace.
+2. Thumbs-up a good answer, which tags the trace.
+3. Run the batch job (from the app or `POST /api/pipelines/cache`). It archives
+   fresh traces to Delta, promotes thumbs-up answers into the cache, extracts user
+   memory, and evicts stale entries.
+4. Ask something similar — it now hits the cache.
+
+## Access model
+
+The cache is shared across all users on purpose: a question one person asks makes
+the same question faster for everyone, and cached SQL text is not treated as
+sensitive.
+
+When user authorization is enabled on the app, Genie calls and cached SQL execute
+as the calling user, so Unity Catalog decides which rows each person sees. Without
+it, both run as the app's service principal and everything still works — which
+keeps the example deployable without an admin-gated preview feature.
+
+<Callout type="warning" title="Before using data with per-user access rules">
+Set `REQUIRE_USER_AUTH=true`. It refuses the service-principal fallback, so a
+request without a caller token fails rather than running with the app's broader
+grants. Left off, a cache hit returns rows fetched with the service principal's
+access — appropriate for demo data, not for anything sensitive.
+</Callout>
+
+## Tearing down
+
+```bash
+databricks bundle destroy -t dev --profile <profile>
+```
+
+Lakebase *soft*-deletes the project and holds its name for a seven-day retention
+window. If you redeploy inside that window, change `lakebase_project` to a new
+name first — otherwise the deploy reports success without recreating the database,
+and the app starts with no cache at all.
+
+<Callout type="note" title="Source">
+The full example lives in
+[`apps/lakebase-genie-caching/`](https://github.com/databricks-solutions/lakebase-cookbook/tree/main/apps/lakebase-genie-caching).
+</Callout>
