@@ -11,6 +11,7 @@ export const NAV: { label: string; href: string }[] = [
   { label: 'Archives', href: '/archives/' },
   { label: 'Blog', href: '/blog/' },
   { label: 'Resources', href: '/resources/' },
+  { label: 'Releases', href: '/releases/' },
 ];
 
 export const FOOTER = {

@@ -1,0 +1,172 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { getLakebaseReleases, groupByMonth, FEEDS, type Cloud, type ReleaseItem } from '../lib/releases';
+
+const releases = await getLakebaseReleases();
+
+const clouds: { id: Cloud; label: string; items: ReleaseItem[] }[] = [
+  { id: 'aws', label: FEEDS.aws.label, items: releases.aws },
+  { id: 'azure', label: FEEDS.azure.label, items: releases.azure },
+];
+
+const releaseTypeClass: Record<string, string> = {
+  GA: 'border-[var(--color-lava-600)] text-[var(--color-lava-600)]',
+  'Public Preview': 'border-[var(--color-ink)] text-[var(--color-ink)]',
+  Beta: 'border-[var(--color-muted)] text-[var(--color-muted)]',
+};
+---
+
+<BaseLayout
+  title="Releases"
+  description="The latest Databricks Lakebase release notes, filtered by cloud provider from the official Databricks release-note feeds."
+>
+  <span class="tag-chip">Releases</span>
+  <h1 class="mt-5 text-4xl font-light tracking-tight sm:text-5xl">
+    Lakebase release notes
+  </h1>
+  <p class="mt-4 max-w-3xl text-[var(--color-muted)]">
+    The latest changes to Databricks Lakebase, pulled from the official release-note
+    feeds and filtered down to the{' '}
+    <span class="mono-label text-[var(--color-ink)]">Lakebase</span> product. Choose the
+    cloud you run on to see the notes for your platform.
+  </p>
+
+  <!-- Cloud provider selector -->
+  <div
+    class="mt-8 inline-flex border border-[var(--color-line)]"
+    role="tablist"
+    aria-label="Cloud provider"
+  >
+    {
+      clouds.map((c) => (
+        <button
+          type="button"
+          role="tab"
+          data-cloud-tab={c.id}
+          class="mono-label cursor-pointer border-r border-[var(--color-line)] px-5 py-2.5 text-[var(--color-muted)] transition-colors last:border-r-0 hover:text-[var(--color-ink)] aria-selected:bg-[var(--color-ink)] aria-selected:text-white"
+          aria-selected="false"
+        >
+          {c.label}
+          <span class="ml-2 text-[0.65rem] opacity-70">{c.items.length}</span>
+        </button>
+      ))
+    }
+  </div>
+
+  {
+    clouds.map((c) => {
+      const months = groupByMonth(c.items);
+      return (
+        <section data-cloud-panel={c.id} hidden class="mt-12">
+          {c.items.length === 0 ? (
+            <p class="border border-[var(--color-line)] bg-[var(--color-band)] p-6 text-sm text-[var(--color-muted)]">
+              Release notes for {c.label} could not be loaded. See the{' '}
+              <a href={FEEDS[c.id].url} class="link-underline" target="_blank" rel="noopener noreferrer">
+                {c.label} release-note feed
+              </a>{' '}
+              directly.
+            </p>
+          ) : (
+            months.map((group) => (
+              <div class="mb-12">
+                <h2 class="mono-label mb-6 text-[var(--color-muted)]">{group.month}</h2>
+                <ol class="relative ml-3 border-l border-[var(--color-line)]">
+                  {group.items.map((item) => (
+                    <li class="relative mb-8 pl-8 last:mb-0">
+                      <span class="absolute -left-[7px] top-1.5 h-3 w-3 rounded-full border-2 border-[var(--color-lava-600)] bg-[var(--color-canvas)]" />
+                      <div class="mb-2 flex flex-wrap items-center gap-3">
+                        {item.releaseType && (
+                          <span
+                            class:list={[
+                              'mono-label border px-2 py-0.5 text-[0.6rem]',
+                              releaseTypeClass[item.releaseType],
+                            ]}
+                          >
+                            {item.releaseType}
+                          </span>
+                        )}
+                        {item.dateLabel && (
+                          <span class="mono-label text-[0.65rem] text-[var(--color-muted)]">
+                            {item.dateLabel}
+                          </span>
+                        )}
+                      </div>
+                      <h3 class="text-xl font-normal leading-snug text-[var(--color-ink)]">
+                        <a href={item.link} target="_blank" rel="noopener noreferrer" class="hover:text-[var(--color-lava-600)]">
+                          {item.title}
+                        </a>
+                      </h3>
+                      <div class="release-body mt-2 max-w-3xl text-sm leading-relaxed text-[var(--color-muted)]" set:html={item.descriptionHtml} />
+                      {item.tags.length > 0 && (
+                        <div class="mt-3 flex flex-wrap gap-2">
+                          {item.tags.map((t) => (
+                            <span class="mono-label border border-[var(--color-line)] px-2 py-0.5 text-[0.6rem] text-[var(--color-muted)]">
+                              {t}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ))
+          )}
+        </section>
+      );
+    })
+  }
+</BaseLayout>
+
+<style is:global>
+  /* Links inside feed descriptions inherit the site's underline-on-hover style. */
+  .release-body a {
+    color: var(--color-ink);
+    text-decoration: underline;
+    text-decoration-color: var(--color-line);
+    text-underline-offset: 2px;
+  }
+  .release-body a:hover {
+    color: var(--color-lava-600);
+    text-decoration-color: var(--color-lava-600);
+  }
+  .release-body p + p {
+    margin-top: 0.5rem;
+  }
+  .release-body code {
+    font-family: var(--font-mono, monospace);
+    font-size: 0.85em;
+    background: var(--color-band);
+    padding: 0.05rem 0.3rem;
+  }
+</style>
+
+<script>
+  const STORAGE_KEY = 'lakebase-releases-cloud';
+  const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-cloud-tab]'));
+  const panels = Array.from(document.querySelectorAll<HTMLElement>('[data-cloud-panel]'));
+
+  function select(cloud: string) {
+    tabs.forEach((t) => t.setAttribute('aria-selected', String(t.dataset.cloudTab === cloud)));
+    panels.forEach((p) => (p.hidden = p.dataset.cloudPanel !== cloud));
+    try {
+      localStorage.setItem(STORAGE_KEY, cloud);
+    } catch {
+      /* ignore storage failures (private mode, etc.) */
+    }
+  }
+
+  tabs.forEach((tab) =>
+    tab.addEventListener('click', () => tab.dataset.cloudTab && select(tab.dataset.cloudTab)),
+  );
+
+  // Restore the visitor's last choice, defaulting to the first cloud (AWS).
+  let initial = tabs[0]?.dataset.cloudTab ?? 'aws';
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved && tabs.some((t) => t.dataset.cloudTab === saved)) initial = saved;
+  } catch {
+    /* ignore */
+  }
+  select(initial);
+</script>
