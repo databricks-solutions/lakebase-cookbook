@@ -139,4 +139,50 @@ export const ARCHIVE: ArchiveEntry[] = [
     summary:
       'The announcement of LTAP, unifying transactions, analytics, streaming, and operational data on a single governed copy of storage — the architecture Lakebase builds on.',
   },
+  {
+    title:
+      'Branching databases like code: a CI/CD pattern for Lakebase, in production at Glaspoort',
+    mediaType: 'Blog',
+    source: 'Databricks Blog',
+    date: 'Jul 2026',
+    url: 'https://www.databricks.com/blog/branching-databases-code-cicd-pattern-lakebase-production-glaspoort',
+    summary:
+      'How Glaspoort runs a CI/CD pattern on Lakebase by branching every long-lived environment directly from production and treating database migrations as the source of truth, creating ephemeral per-PR branches tested against production-shaped data before changes are promoted.',
+  },
+  {
+    title: 'Take Control: Customer-Managed Keys for Lakebase Postgres',
+    mediaType: 'Blog',
+    source: 'Databricks Blog',
+    date: 'Apr 2026',
+    url: 'https://www.databricks.com/blog/take-control-customer-managed-keys-lakebase-postgres',
+    summary:
+      'Introduces customer-managed keys (CMK) for Lakebase Postgres, using hierarchical envelope encryption to protect both persistent storage and ephemeral compute with keys held in your own cloud KMS — including key revocation that can render data cryptographically inaccessible for regulated workloads.',
+  },
+  {
+    title: 'Unlock seamless and cost-effective marketing campaigns with Lakebase',
+    mediaType: 'Blog',
+    source: 'Databricks Blog',
+    date: 'May 2026',
+    url: 'https://www.databricks.com/blog/unlock-seamless-and-cost-effective-marketing-campaigns-lakebase',
+    summary:
+      'Shows how Lakebase serves as the serverless OLTP database behind marketing platforms such as SAP Engagement Cloud, cutting total cost of ownership by scaling to zero during idle periods and removing manual sync pipelines through native synced tables.',
+  },
+  {
+    title: "Beyond Provisioning: The Developer's Guide to Databricks Lakebase Autoscaling",
+    mediaType: 'Blog',
+    source: 'Databricks Blog',
+    date: 'Mar 2026',
+    url: 'https://www.databricks.com/blog/beyond-provisioning-developers-guide-databricks-lakebase-autoscaling',
+    summary:
+      'A developer-focused guide to Lakebase autoscaling: how compute units adjust dynamically to CPU, memory, and working-set size, how to set min/max scaling boundaries, and how pairing autoscaling with scale-to-zero can cut compute costs by 70% or more for bursty workloads.',
+  },
+  {
+    title: 'Zero-Downtime Patching in Lakebase Part 1: Prewarming',
+    mediaType: 'Blog',
+    source: 'Databricks Blog',
+    date: 'Mar 2026',
+    url: 'https://www.databricks.com/blog/zero-downtime-patching-lakebase-part-1-prewarming',
+    summary:
+      'Explains how Lakebase avoids performance drops during planned maintenance by prewarming a new compute node in the background — preloading its cache from the current primary’s page list and WAL stream before promotion — so throughput recovers almost instantly instead of suffering a cold-restart hit.',
+  },
 ];
