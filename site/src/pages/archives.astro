@@ -7,6 +7,33 @@ const tagClass: Record<MediaType, string> = {
   Blog: 'border-[var(--color-ink)] text-[var(--color-ink)]',
   Announcement: 'border-[var(--color-ink)] text-[var(--color-ink)]',
 };
+
+// Parse the free-form date labels ("Jun 2026", "2025") into a sortable
+// timestamp so entries can be ordered most-recent first. Year-only dates
+// fall back to January.
+const MONTHS: Record<string, number> = {
+  Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
+  Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11,
+};
+function toTimestamp(date: string): number {
+  const monthYear = date.match(/^([A-Za-z]{3})\s+(\d{4})$/);
+  if (monthYear) return Date.UTC(Number(monthYear[2]), MONTHS[monthYear[1]] ?? 0, 1);
+  const yearOnly = date.match(/^(\d{4})$/);
+  if (yearOnly) return Date.UTC(Number(yearOnly[1]), 0, 1);
+  return 0;
+}
+const entries = [...ARCHIVE].sort((a, b) => toTimestamp(b.date) - toTimestamp(a.date));
+
+// Media-type filter: "All" (default) plus one per media type present.
+const mediaTypes: MediaType[] = ['Video', 'Blog', 'Announcement'];
+const filters: { id: string; label: string; count: number }[] = [
+  { id: 'all', label: 'All', count: entries.length },
+  ...mediaTypes.map((t) => ({
+    id: t,
+    label: t,
+    count: entries.filter((e) => e.mediaType === t).length,
+  })),
+];
 ---
 
 <BaseLayout
@@ -17,7 +44,7 @@ const tagClass: Record<MediaType, string> = {
   <h1 class="mt-5 text-4xl font-light tracking-tight sm:text-5xl">
     Lakebase in the wild
   </h1>
-  <p class="mt-4 mb-12 max-w-3xl text-[var(--color-muted)]">
+  <p class="mt-4 mb-8 max-w-3xl text-[var(--color-muted)]">
     A curated archive of videos, blogs, and announcements highlighting the
     success of Databricks Lakebase. To add an entry, open a pull request against{' '}
     <a
@@ -28,13 +55,36 @@ const tagClass: Record<MediaType, string> = {
     >.
   </p>
 
+  <!-- Media-type filter -->
+  <div
+    class="mb-10 inline-flex flex-wrap border border-[var(--color-line)]"
+    role="tablist"
+    aria-label="Media type"
+  >
+    {
+      filters.map((f) => (
+        <button
+          type="button"
+          role="tab"
+          data-media-tab={f.id}
+          class="mono-label cursor-pointer border-r border-[var(--color-line)] px-5 py-2.5 text-[var(--color-muted)] transition-colors last:border-r-0 hover:text-[var(--color-ink)] aria-selected:bg-[var(--color-ink)] aria-selected:text-white"
+          aria-selected={f.id === 'all' ? 'true' : 'false'}
+        >
+          {f.label}
+          <span class="ml-2 text-[0.65rem] opacity-70">{f.count}</span>
+        </button>
+      ))
+    }
+  </div>
+
   <div class="grid grid-cols-1 gap-px border border-[var(--color-line)] bg-[var(--color-line)] md:grid-cols-2">
     {
-      ARCHIVE.map((entry) => (
+      entries.map((entry) => (
         <a
           href={entry.url}
           target="_blank"
           rel="noopener noreferrer"
+          data-media-card={entry.mediaType}
           class="group flex flex-col bg-[var(--color-canvas)] p-6 transition-colors hover:bg-[var(--color-band)]"
         >
           <div class="mb-3 flex items-center justify-between gap-3">
@@ -63,4 +113,49 @@ const tagClass: Record<MediaType, string> = {
       ))
     }
   </div>
+
+  <p
+    data-media-empty
+    hidden
+    class="mt-6 text-sm text-[var(--color-muted)]"
+  >
+    No entries for this media type yet.
+  </p>
 </BaseLayout>
+
+<script>
+  const STORAGE_KEY = 'lakebase-archives-media';
+  const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-media-tab]'));
+  const cards = Array.from(document.querySelectorAll<HTMLElement>('[data-media-card]'));
+  const empty = document.querySelector<HTMLElement>('[data-media-empty]');
+
+  function select(type: string) {
+    tabs.forEach((t) => t.setAttribute('aria-selected', String(t.dataset.mediaTab === type)));
+    let visible = 0;
+    cards.forEach((c) => {
+      const show = type === 'all' || c.dataset.mediaCard === type;
+      c.hidden = !show;
+      if (show) visible++;
+    });
+    if (empty) empty.hidden = visible !== 0;
+    try {
+      localStorage.setItem(STORAGE_KEY, type);
+    } catch {
+      /* ignore storage failures (private mode, etc.) */
+    }
+  }
+
+  tabs.forEach((tab) =>
+    tab.addEventListener('click', () => tab.dataset.mediaTab && select(tab.dataset.mediaTab)),
+  );
+
+  // Restore the visitor's last choice, defaulting to "all".
+  let initial = 'all';
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved && tabs.some((t) => t.dataset.mediaTab === saved)) initial = saved;
+  } catch {
+    /* ignore */
+  }
+  select(initial);
+</script>
