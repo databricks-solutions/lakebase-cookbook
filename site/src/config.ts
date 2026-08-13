@@ -10,7 +10,6 @@ export const NAV: { label: string; href: string }[] = [
   { label: 'Why Lakebase', href: '/why-lakebase/' },
   { label: 'Archives', href: '/archives/' },
   { label: 'Blog', href: '/blog/' },
-  { label: 'Resources', href: '/resources/' },
   { label: 'Releases', href: '/releases/' },
 ];
 
@@ -35,7 +34,6 @@ export const FOOTER = {
       title: 'More',
       links: [
         { label: 'Blog', href: '/blog/' },
-        { label: 'Resources', href: '/resources/' },
         { label: 'GitHub', href: 'https://github.com/databricks-solutions/lakebase-cookbook' },
       ],
     },
