@@ -1,0 +1,74 @@
+---
+title: Lakebase SCM Extension — paired Git + Lakebase branching in your IDE
+sidebar_label: SCM Extension
+category: Developer Experience
+sidebar_position: 23
+description: A VS Code / Cursor extension that pairs every code branch with a Lakebase database branch, so code and schema travel together.
+---
+import Callout from '../../../components/Callout.astro';
+
+# Lakebase SCM Extension — paired Git + Lakebase branching in your IDE
+
+The [Lakebase SCM Extension](https://github.com/databricks-solutions/lakebase-scm-extension)
+is a VS Code / Cursor extension that replaces the built-in Git source control
+with a unified **Git + Lakebase** SCM provider. Every code branch gets a paired
+Databricks Lakebase database branch — code and schema travel together through
+development, review, CI/CD, and merge.
+
+**The problem it solves.** When an application uses Lakebase (Databricks'
+Postgres-compatible database with copy-on-write branching), developers have to
+keep code branches and database branches in sync. Without the extension, that
+means manually creating database branches, refreshing credentials, tracking
+schema diffs, and cleaning up branches across the CLI, the Databricks console,
+and GitHub. The extension makes the code branch and the database branch one
+operation, surfaced where you already work.
+
+## What you get
+
+| Area | What it does |
+|------|--------------|
+| Paired branching | Creating a code branch provisions a paired Lakebase database branch; they travel together through review and merge |
+| Unified SCM view | Replaces the built-in Git provider with a combined Git + Lakebase source-control surface |
+| Credentials handled | Short-lived database credentials are minted and refreshed for you |
+| Project scaffold | A "Create New Project" wizard scaffolds a Lakebase-paired repo (Java/Spring Boot, Kotlin/Spring Boot, Python/FastAPI, or Node.js/Express) |
+| Adopt existing repos | An "Adopt" command onboards an existing Git repo to Lakebase without touching the rest of the codebase |
+
+## Prerequisites
+
+VS Code 1.85+ or Cursor, Databricks CLI v0.285+ (`brew install databricks`),
+GitHub sign-in or a PAT, a PostgreSQL client (`psql`), and a Databricks
+workspace with Lakebase enabled. Per-language: Java/Kotlin need JVM 21+ and
+Maven; Python needs 3.10+ and `uv`; Node.js needs 18+.
+
+## Install
+
+1. Download the `lakebase-scm-extension-*.vsix` asset from the
+   [latest release](https://github.com/databricks-solutions/lakebase-scm-extension/releases/latest).
+2. In VS Code: **Extensions** → `...` → **Install from VSIX** → select the file.
+3. Reload the window.
+
+Then run **`Lakebase: Create New Project`** from the Command Palette to scaffold
+a new paired project, or adopt an existing repo. The
+[extension README](https://github.com/databricks-solutions/lakebase-scm-extension)
+has the full wizard walkthrough.
+
+<Callout type="note" title="Built on the Lakebase SCM engine">
+The extension is the IDE surface over
+[Lakebase SCM Utils](/docs/examples/lakebase-scm-utils/) — the portable engine
+that owns branching, the SCM state machine, credentials, and migrations. The
+[Consort](/docs/examples/consort/) framework uses the same engine for its
+agentic workflow.
+</Callout>
+
+<Callout type="note" title="A pointer, not a bundle deploy">
+The extension ships no `databricks.yml`. It is installed as a VSIX from
+[`databricks-solutions/lakebase-scm-extension`](https://github.com/databricks-solutions/lakebase-scm-extension)
+and run against a Lakebase-enabled workspace you provision separately.
+</Callout>
+
+<Callout type="note" title="Source">
+The example folder lives in
+[`developer_experience/lakebase_scm_extension/`](https://github.com/databricks-solutions/lakebase-cookbook/tree/main/developer_experience/lakebase_scm_extension);
+the extension itself is at
+[`databricks-solutions/lakebase-scm-extension`](https://github.com/databricks-solutions/lakebase-scm-extension).
+</Callout>

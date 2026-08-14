@@ -12,6 +12,33 @@ export interface ArchiveEntry {
 // To add an entry, append to this list and open a pull request.
 export const ARCHIVE: ArchiveEntry[] = [
   {
+    title: 'Enabling Evolutionary Database Development: database branching with Lakebase',
+    mediaType: 'Blog',
+    source: 'Databricks Blog',
+    date: 'May 2026',
+    url: 'https://www.databricks.com/blog/enabling-evolutionary-database-development-database-branching-lakebase',
+    summary:
+      'Part 1 of a three-part series with Pramod Sadalage (Thoughtworks). Follows one developer through a single feature and its database change, showing how a per-developer Lakebase branch — a fast, realistic, isolated copy of production — turns database change from a bottleneck into a normal part of feature development, finally making "everybody gets their own database instance" operational.',
+  },
+  {
+    title: 'Enabling Evolutionary Database Development: database branching with Lakebase, continued',
+    mediaType: 'Blog',
+    source: 'Databricks Blog',
+    date: 'Jun 2026',
+    url: 'https://www.databricks.com/blog/enabling-evolutionary-database-development-database-branching-lakebase-part-2',
+    summary:
+      'Part 2 of the series. Copy-on-write branching restores the original seven evolutionary-database practices as routine and unlocks two new ones — destructive testing and A/B schema prototyping at the database level — all inside the standard CI/CD pipeline without sacrificing rigor or governance.',
+  },
+  {
+    title: 'Enabling Evolutionary Database Development: Database branching with Lakebase, the conclusion',
+    mediaType: 'Blog',
+    source: 'Databricks Blog',
+    date: 'Jun 2026',
+    url: 'https://www.databricks.com/blog/enabling-evolutionary-database-development-database-branching-lakebase-part-3',
+    summary:
+      'Part 3 of the series. At team scale, tiers become long-running branches, governance is designed once and inherited per branch, and agents work inside the same policy-enforced substrate as humans — letting a large team plus agent fleets collaborate on a unified, governed database.',
+  },
+  {
     title: 'From monolith to Lakebase to LTAP: rethinking the database from storage up',
     mediaType: 'Blog',
     source: 'Databricks Blog',
