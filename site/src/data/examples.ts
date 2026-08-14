@@ -49,6 +49,36 @@ export const EXAMPLES: ExampleCard[] = [
     status: 'ready',
   },
   {
+    category: 'Developer Experience',
+    tag: 'Agentic Development',
+    title: 'Consort — enforced spec-first TDD on Lakebase branches',
+    bracket: 'role agents, deterministic gates, honest-green',
+    description:
+      'An agentic development framework: a Scrum team rendered as role agents runs spec-first, test-driven development where every "green" is a real test on a live Lakebase branch, driven by a deterministic state machine with human-approval gates and immutable tests.',
+    href: '/docs/examples/consort/',
+    status: 'ready',
+  },
+  {
+    category: 'Developer Experience',
+    tag: 'IDE Extension',
+    title: 'Paired Git + Lakebase branching in your IDE',
+    bracket: 'VS Code / Cursor, branch pairing, credential rotation',
+    description:
+      'A VS Code / Cursor extension that replaces built-in Git source control with a unified Git + Lakebase provider, pairing every code branch with a Lakebase database branch so code and schema travel together through review, CI/CD, and merge.',
+    href: '/docs/examples/lakebase-scm-extension/',
+    status: 'ready',
+  },
+  {
+    category: 'Developer Experience',
+    tag: 'SCM Engine',
+    title: 'The portable Lakebase branching + SCM engine',
+    bracket: 'library API + CLIs, paired-branch state machine',
+    description:
+      'The portable engine behind the SCM extension and Consort: database branching, the paired-branch SCM workflow state machine, credential minting, and schema migration — consumable as a TypeScript library and as CLIs.',
+    href: '/docs/examples/lakebase-scm-utils/',
+    status: 'ready',
+  },
+  {
     category: 'Apps',
     tag: 'FastAPI App',
     title: 'FastAPI backend on Lakebase',

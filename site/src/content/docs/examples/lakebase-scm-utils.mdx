@@ -1,0 +1,75 @@
+---
+title: Lakebase SCM Utils — the portable branching + SCM engine
+sidebar_label: SCM Utils
+category: Developer Experience
+sidebar_position: 24
+description: The portable engine behind the Lakebase SCM extension and Consort — database branching, the paired-branch SCM state machine, credentials, and migrations.
+---
+import Callout from '../../../components/Callout.astro';
+
+# Lakebase SCM Utils — the portable branching + SCM engine
+
+[`@databricks-solutions/lakebase-scm-utils`](https://github.com/databricks-solutions/lakebase-scm-utils)
+is the Lakebase SCM and substrate engine: the portable core that owns database
+branching, the paired-branch SCM workflow state machine, connection and
+credential minting, schema migration, project scaffold and deploy primitives,
+and the shared git / GitHub / util layer.
+
+**Why it exists.** These SCM workflows and their supporting substrate were
+originally embedded in [Consort](/docs/examples/consort/) alongside the agentic
+orchestration. They were extracted into this package so both the
+[Lakebase SCM Extension](/docs/examples/lakebase-scm-extension/) and the Consort
+kit can depend on a single, versioned engine — easier to consume, and portable.
+
+## Two consumption surfaces
+
+**Library API** — for the extension and the Consort orchestration. Import the
+substrate from the package barrel or a sub-path:
+
+```ts
+import { createBranch, getConnection } from "@databricks-solutions/lakebase-scm-utils";
+import { resolveGitHubToken } from "@databricks-solutions/lakebase-scm-utils/github";
+```
+
+**CLIs** — for scaffolded projects and CI: the `lakebase-*` and `lakebase-scm-*`
+bins, resolved on PATH by the `lk` shim.
+
+## What it owns
+
+| Capability | What it provides |
+|------------|------------------|
+| Database branching | Create, connect to, and tear down copy-on-write Lakebase branches |
+| Paired-branch SCM | The workflow state machine that keeps a code branch and its database branch in step |
+| Credentials | Short-lived connection + credential minting for a branch endpoint |
+| Migrations | Schema-migration primitives run against a branch |
+| Scaffold + deploy | Project scaffold and deploy primitives shared by the extension and Consort |
+
+## Install
+
+Consumed via a GitHub ref (npm publish is deferred):
+
+```bash
+npm install github:databricks-solutions/lakebase-scm-utils#v<version>
+```
+
+The package ships a pre-built `dist/` on every tagged release, so a consumer
+install skips the build.
+
+<Callout type="note" title="The shared foundation">
+This engine is what the [Lakebase SCM Extension](/docs/examples/lakebase-scm-extension/)
+and [Consort](/docs/examples/consort/) are both built on — the extension as the
+IDE surface, Consort as the agentic orchestration layer.
+</Callout>
+
+<Callout type="note" title="A pointer, not a bundle deploy">
+This package ships no `databricks.yml`. It is installed from
+[`databricks-solutions/lakebase-scm-utils`](https://github.com/databricks-solutions/lakebase-scm-utils)
+as a dependency of the extension and Consort.
+</Callout>
+
+<Callout type="note" title="Source">
+The example folder lives in
+[`developer_experience/lakebase_scm_utils/`](https://github.com/databricks-solutions/lakebase-cookbook/tree/main/developer_experience/lakebase_scm_utils);
+the package itself is at
+[`databricks-solutions/lakebase-scm-utils`](https://github.com/databricks-solutions/lakebase-scm-utils).
+</Callout>

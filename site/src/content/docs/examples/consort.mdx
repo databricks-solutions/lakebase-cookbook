@@ -1,0 +1,110 @@
+---
+title: Consort — spec-first, test-driven agentic development on Lakebase branches
+sidebar_label: Consort
+category: Developer Experience
+sidebar_position: 22
+description: An agentic development framework where a team of role agents runs spec-first, test-driven development and every green is a real test on a live Lakebase branch.
+---
+import Callout from '../../../components/Callout.astro';
+
+# Consort — spec-first, test-driven agentic development on Lakebase branches
+
+[Consort](https://github.com/databricks-solutions/consort) keeps AI-written code
+clean and correct: **spec-first and test-driven**, driven by a deterministic
+state machine with human-approval gates and immutable tests. Every "green" is a
+real test run on a live **Lakebase** database branch, enforced by hard rules
+rather than soft prompts — so engineering discipline is not left to the whim of
+a model.
+
+Consort takes its name from music: a *consort* is an ensemble that plays in
+concert, each musician holding one part while a conductor keeps them in time.
+Applied to software, a set of agents each take on one familiar lifecycle role
+while a deterministic conductor keeps them in sequence and a human approves
+every gate. No agent plays another's part.
+
+## Why it uses Lakebase
+
+The database is the hardest dependency to get right, because it is the one you
+can't cheaply branch: it gets faked with mocks that drift from production, or
+shared across a staging box the tests quietly diverge from. Lakebase removes
+that constraint — a database branch is a real, governed, copy-on-write copy
+created in about a second. Consort builds on that to make an agent's "done"
+checkable:
+
+- **Verified against real data** — "green" means a real test runner passed
+  against a live Lakebase database branch, not an agent's say-so.
+- **Independently reviewed** — the agent that writes the code is never the one
+  that judges it.
+- **Spec-first and immutable** — intent is frozen at a hashed gate; within a unit
+  of work, tests can't be edited to force a pass.
+- **Deterministically driven** — the control loop is codified, so it can't drift,
+  skip a step, or get lost after a long session.
+- **Human-gated** — gates fail closed; nothing advances without your approval.
+
+## The ensemble
+
+Each agent owns one concern and communicates only through the artifacts it
+produces and consumes, in the order a lifecycle would run them.
+
+| Agent | Lifecycle role | Owns |
+|-------|----------------|------|
+| Product Owner | Product | the backlog and each story's acceptance criteria |
+| Spec Author | Analysis | the structured, testable specification |
+| Architect Reviewer | Architecture | the layering lens, NFRs, persistence invariants |
+| DBA | Data | the physical schema and per-story migration plan |
+| Test Strategist | Test design | the ordered master test list drawn from the ACs |
+| UX Designer | Experience | the interface design, for user-facing work |
+| Navigator | Test + review | the failing test (RED), and review of the code |
+| Driver | Implementation | the code that passes the test (GREEN), then refactors |
+
+## How it runs
+
+Consort drives a spec-first design lane and then a branched-database TDD build
+lane, stopping at every gate:
+
+- at the **design gate**, you approve the frozen spec — stories and acceptance
+  criteria, the ordered test list, and the DBA's schema plan;
+- through the **build**, each cycle writes a failing test, makes it pass against
+  a live Lakebase database branch, then refactors;
+- at the **deploy** and **promote** gates, you approve the release and the
+  migration to the parent tier.
+
+## Getting started
+
+```bash
+# 0. Bootstrap and run the environment doctor (needs a Lakebase-enabled workspace)
+bash <(curl -sL https://raw.githubusercontent.com/databricks-solutions/consort/main/bootstrap.sh)
+
+# 1. Install the Claude Code plugin
+claude plugin marketplace add databricks-solutions/consort
+claude plugin install consort@databricks-solutions
+
+# 2. Launch Claude Code and run /consort:start in the session
+```
+
+Then walk the
+[`examples/first-project/`](https://github.com/databricks-solutions/consort/tree/main/examples/first-project)
+step-by-step first session using the StockFlow sample warehouse app. Other
+coding agents (Cursor, Genie Code, MCP clients) are supported via `install.sh`.
+
+<Callout type="note" title="Built on the Lakebase SCM engine">
+Consort layers its orchestration on
+[Lakebase SCM Utils](/docs/examples/lakebase-scm-utils/) — the portable engine
+that owns branching, the paired-branch SCM state machine, credentials, and
+migrations — the same engine behind the
+[Lakebase SCM Extension](/docs/examples/lakebase-scm-extension/).
+</Callout>
+
+<Callout type="note" title="A pointer, not a bundle deploy">
+Unlike the deployable cookbook examples, Consort ships no `databricks.yml`. It is
+installed from
+[`databricks-solutions/consort`](https://github.com/databricks-solutions/consort)
+and run against a Lakebase-enabled workspace you provision separately.
+</Callout>
+
+<Callout type="note" title="Source">
+The example folder lives in
+[`developer_experience/consort/`](https://github.com/databricks-solutions/lakebase-cookbook/tree/main/developer_experience/consort);
+the framework itself is at
+[`databricks-solutions/consort`](https://github.com/databricks-solutions/consort).
+</Callout>
