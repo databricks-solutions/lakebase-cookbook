@@ -18,7 +18,8 @@ def cosine(a, b) -> float:
     return dot / (na * nb)
 
 
-def retrieve(query_embedding, nodes, edges, embeddings, seed_k=2, max_hops=2, limit=25):
+def retrieve(query_embedding, nodes, edges, embeddings, seed_k=2, max_hops=2, limit=25,
+             seed_floor=-1.0):
     """Mirror of graphrag_retrieval.sql.
 
     Args:
@@ -26,11 +27,18 @@ def retrieve(query_embedding, nodes, edges, embeddings, seed_k=2, max_hops=2, li
       nodes: dict node_id -> {"node_type","name","props",...}
       edges: iterable of (src_id, dst_id, rel)
       embeddings: dict node_id -> list[float]
+      seed_floor: min cosine similarity a seed must clear. Cosine ranges [-1, 1], so the
+        default -1.0 keeps ALL candidates (identical to the pre-floor behavior). Raise it
+        toward e.g. 0.3 to drop weak seeds that drag unrelated subgraphs into the ranking.
     Returns: list of dicts {node_id,node_type,name,nearest_hop,rels,score} desc by score.
     """
-    # 1) semantic seed — top-k by cosine similarity
+    # 1) semantic seed — top-k by cosine similarity, above the seed_floor
     sims = sorted(
-        ((nid, cosine(query_embedding, emb)) for nid, emb in embeddings.items()),
+        (
+            (nid, sim)
+            for nid, emb in embeddings.items()
+            if (sim := cosine(query_embedding, emb)) >= seed_floor
+        ),
         key=lambda x: x[1], reverse=True,
     )[:seed_k]
 

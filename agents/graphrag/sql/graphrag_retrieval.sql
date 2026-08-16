@@ -9,6 +9,11 @@
 --   :query_embedding  VECTOR(1024)  -- embedding of the user question (from your embeddings endpoint)
 --   :seed_k           INT           -- how many semantic seed nodes (e.g. 5)
 --   :max_hops         INT           -- traversal depth bound (e.g. 2)
+--   :seed_floor       FLOAT         -- min cosine similarity a seed must clear. Cosine ranges
+--                                      [-1, 1], so -1.0 keeps ALL seeds (same as no floor).
+--                                      Raise toward e.g. 0.3 to guard against distractor
+--                                      pollution: under heavy off-topic content, weak seeds
+--                                      drag unrelated subgraphs in and dilute the ranking.
 --
 -- Distance: cosine. pgvector '<=>' returns cosine DISTANCE (0=identical),
 -- so similarity = 1 - distance. HNSW index (vector_cosine_ops) backs the ORDER BY.
@@ -21,6 +26,7 @@ seed AS (
         e.node_id,
         1 - (e.embedding <=> :query_embedding) AS similarity
     FROM graph.node_embeddings e
+    WHERE 1 - (e.embedding <=> :query_embedding) >= :seed_floor   -- drop weak seeds (distractor guard; -1.0 = keep all)
     ORDER BY e.embedding <=> :query_embedding      -- HNSW ANN scan
     LIMIT :seed_k
 ),

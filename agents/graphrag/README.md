@@ -33,6 +33,36 @@ Lakebase extensions:
 Position it as *"graph traversal via recursive CTEs + semantic retrieval via pgvector"* — great for
 bounded k-hop operational retrieval; **not** a billion-edge graph-analytics engine.
 
+## Operational guardrails
+
+Defaults that keep retrieval fast, precise, and cost-predictable on real Lakebase:
+
+- **Bound `max_hops` to 2 on dense graphs.** Recursive-CTE cost is *density-driven*: at 4 hops on a
+  dense graph the walk approaches a full-graph scan (seconds), while 2 hops stays in the tens of ms
+  even at ~1M nodes / 10M edges. Raise hops only on sparse graphs.
+- **Set a `seed_floor` under distractor-heavy corpora.** Weak semantic seeds drag unrelated subgraphs
+  into the ranking and dilute precision; a cosine floor (e.g. `0.3`) drops them. Cosine ranges
+  `[-1, 1]`, so the default `-1.0` keeps all seeds (identical to no floor). See `:seed_floor` in
+  [`sql/graphrag_retrieval.sql`](sql/graphrag_retrieval.sql).
+- **Keep a minimum Lakebase compute above zero for latency-sensitive serving.** After scale-to-zero,
+  the first query pays a cold-start penalty (several× the warm latency) while index pages load in.
+- **Seed with plain pgvector, not a BM25+vector hybrid.** Lexical fusion adds latency and can *hurt*
+  ranking on this workload — the relationship recall comes from graph expansion, not lexical overlap.
+- **Treat the HNSW build as a one-time cost that scales with corpus size** (seconds at 10⁴ nodes,
+  minutes at 10⁵), independent of query latency. Storing embeddings as `halfvec` (fp16) cuts the
+  embedding-plus-HNSW-index storage ~2.5× vs fp32 (measured) at negligible recall cost — a cheap
+  lever for large graphs.
+- **Route simple, single-entity questions to the managed path first.** If a question needs no
+  multi-hop traversal, ontology-enriched Genie or a plain vector lookup is cheaper; reserve GraphRAG
+  for genuinely relational / multi-hop queries.
+
+## Cross-stack interop (`gold_triplets`)
+
+The `nodes` / `edges` tables map to a portable **8-column triplet shape** — `subject_id, subject_type,
+predicate, object_id, object_type, confidence, source_method, source_agent` — so the same graph can be
+emitted or consumed by other graph stacks (Spark/Python builders, other engines) **without migration**.
+It's a column contract, not a dependency. See [`sql/gold_triplets_mapping.sql`](sql/gold_triplets_mapping.sql).
+
 ## Layout
 
 ```
@@ -41,7 +71,8 @@ graphrag/
 ├── pyproject.toml       # uv deps + ruff config
 ├── sql/
 │   ├── schema.sql              # nodes / edges / node_embeddings + HNSW / ltree / pg_trgm
-│   └── graphrag_retrieval.sql  # hybrid: pgvector seed → recursive-CTE expansion → ranked context
+│   ├── graphrag_retrieval.sql  # hybrid: pgvector seed (+ seed_floor) → recursive-CTE expansion → ranked context
+│   └── gold_triplets_mapping.sql  # portable 8-column triplet view over nodes/edges (cross-stack interop)
 ├── graph_build.py       # pure assemble_graph(dims, enrichment) → (nodes, edges); guards the FK
 ├── graph_retrieve.py    # pure in-memory twin of the retrieval SQL (for offline dev/test)
 ├── notebooks/
