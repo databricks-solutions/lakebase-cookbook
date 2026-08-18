@@ -13,6 +13,10 @@ variables:
     default: main
   schema:
     default: graphrag
+  # Volume holding the source documents for upstream indexing
+  # (sql/upstream_ai_functions.sql). Only needed if you build the graph from documents.
+  docs_volume:
+    default: graphrag_docs
   # Databricks model-serving endpoints (generic — any provider registered in your workspace).
   chat_endpoint:
     default: databricks-claude-sonnet-4-5

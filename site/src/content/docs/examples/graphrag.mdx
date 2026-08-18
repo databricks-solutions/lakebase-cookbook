@@ -97,6 +97,40 @@ This is the GraphRAG win: a supplier or substitute that shares no keywords with
 the question still surfaces because it's one hop from a semantically-matched node
 — something flat vector RAG never retrieves.
 
+## Building the graph from documents
+
+The example above starts from structured dims. When the source is documents,
+[`graph_upstream.py`](https://github.com/databricks-solutions/lakebase-cookbook/tree/main/agents/graphrag/graph_upstream.py) covers the indexing phase that comes first:
+parse with `ai_parse_document`, chunk into passages with stable ids, extract typed triples with
+`ai_query` under a constrained schema, resolve entities, and emit the `gold_triplets` contract.
+The two steps needing a workspace live in
+[`sql/upstream_ai_functions.sql`](https://github.com/databricks-solutions/lakebase-cookbook/tree/main/agents/graphrag/sql/upstream_ai_functions.sql).
+
+Two lessons from running it against a live workspace are worth carrying into your own build:
+
+**Entity resolution is the load-bearing step, and Jaccard alone is not enough.** The same
+organization appears as "Acme", "Acme Foods" and "ACME Foods Inc."; each spelling would otherwise
+become its own node and fragment the graph precisely where multi-hop retrieval needs it joined.
+Jaccard trigram similarity scores "Acme Foods" against "Acme Foods Incorporated" at just `0.42` —
+below any sane threshold — because it penalizes length difference, and legal suffixes are the most
+common way one entity is written two ways. `resolve_entities()` therefore also applies a
+containment measure, the shape of `pg_trgm`'s `word_similarity()`, which scores that pair `0.92`.
+Every merge is written back as a `SAME_AS` edge, so the resolution is auditable in the graph.
+
+**Pin the relation vocabulary, not just the entity types.** Left free, the model invents a
+predicate per sentence: a live run over two short documents produced
+`SUPPLIES_TO_RETAILERS_ACROSS`, `OPERATES_DISTRIBUTION_CENTER_IN`, `IS_LOCATED_IN` and
+`BELONGS_TO_CATEGORY` — the last two near-misses for this schema's `LOCATED_IN` and `BELONGS_TO`.
+Each spelling becomes a distinct edge label, and typed-path traversal degrades toward an untyped
+walk. Constrain the predicate list in the extraction prompt and pass
+`allowed_predicates=DEFAULT_PREDICATES, on_unknown="drop"` as a backstop.
+
+<Callout type="note" title="ai_query response format">
+`ai_query`'s DDL-string `responseFormat` rejects a top-level array field — `STRUCT<triples:
+ARRAY<...>>` fails with `AI_FUNCTION_UNSUPPORTED_RESPONSE_FORMAT.DDL_STRING`. Use the JSON-schema
+form to constrain the model, then `from_json` with the DDL string to type the result.
+</Callout>
+
 ## Building the graph safely
 
 `assemble_graph()` in [`graph_build.py`](https://github.com/databricks-solutions/lakebase-cookbook/tree/main/agents/graphrag/graph_build.py)
@@ -108,7 +142,7 @@ creating dangling references. Undirected `SUBSTITUTE_FOR` edges are stored once
 
 The retrieval and build logic is validated entirely offline by
 [`smoketest/graphrag_logic_smoketest.py`](https://github.com/databricks-solutions/lakebase-cookbook/tree/main/agents/graphrag/smoketest/graphrag_logic_smoketest.py)
-— 35 assertions (on DuckDB, no Lakebase or model endpoint needed) covering the
+— 67 assertions (on DuckDB, no Lakebase or model endpoint needed) covering the
 semantic seed, graph expansion surfacing context flat RAG misses, the
 dangling-edge guard, `0.5^hop` score decay, the `max_hops` depth bound, and the
 `seed_floor` distractor guard.

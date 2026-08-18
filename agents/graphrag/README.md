@@ -33,6 +33,42 @@ Lakebase extensions:
 Position it as *"graph traversal via recursive CTEs + semantic retrieval via pgvector"* — great for
 bounded k-hop operational retrieval; **not** a billion-edge graph-analytics engine.
 
+## Building the graph from documents (upstream indexing)
+
+`graph_build.py` starts from *structured* dims. If your source is documents, `graph_upstream.py`
+covers the phase before that:
+
+```
+parse (ai_parse_document) -> chunk -> extract (ai_query, constrained schema)
+  -> entity resolution (trigram + union-find) -> gold_triplets
+```
+
+Chunking, entity resolution and triplet assembly are pure Python and covered by the offline smoke
+test. The two steps that need a workspace — parse and extract — are in
+[`sql/upstream_ai_functions.sql`](sql/upstream_ai_functions.sql).
+
+Two things matter more than the rest, both learned from running this live:
+
+- **Entity resolution is the load-bearing step.** The same entity appears written many ways
+  ("Acme", "Acme Foods", "ACME Foods Inc."), and each spelling would otherwise become its own
+  node — fragmenting the graph exactly where multi-hop retrieval needs it joined. Note that
+  Jaccard trigram similarity alone is *not* enough: "Acme Foods" vs "Acme Foods Incorporated"
+  scores only `0.42`, so legal suffixes and abbreviations slip past it. `resolve_entities()` also
+  applies a containment measure (the shape of `pg_trgm`'s `word_similarity()`), which scores that
+  pair `0.92`. Merges are written back as `SAME_AS` edges so the decision is auditable in the
+  graph rather than lost in the pipeline.
+- **Pin the relation vocabulary.** Constraining entity types is not enough. Left free, the model
+  invents a predicate per sentence — a live run over two short documents produced
+  `SUPPLIES_TO_RETAILERS_ACROSS`, `OPERATES_DISTRIBUTION_CENTER_IN`, `IS_LOCATED_IN` and
+  `BELONGS_TO_CATEGORY`, the last two near-misses for this schema's `LOCATED_IN` and
+  `BELONGS_TO`. Every spelling becomes its own edge label and the typed-path logic in the
+  retrieval SQL degrades toward an untyped walk. Constrain the predicate list in the prompt, and
+  pass `allowed_predicates=DEFAULT_PREDICATES, on_unknown="drop"` as a backstop.
+
+`ai_query` note: its DDL-string `responseFormat` rejects a top-level array, so the extraction step
+uses the JSON-schema form to constrain the model and `from_json` to type the result. The SQL
+carries the exact error you get if you try it the other way.
+
 ## Operational guardrails
 
 Defaults that keep retrieval fast, precise, and cost-predictable on real Lakebase:
@@ -111,7 +147,7 @@ cd agents/graphrag
 uv run --python 3.11 --with duckdb --with numpy smoketest/graphrag_logic_smoketest.py
 ```
 
-35 assertions: semantic seed, graph expansion surfacing connected context flat RAG misses,
+67 assertions: semantic seed, graph expansion surfacing connected context flat RAG misses,
 dangling-edge guard, blended-score ranking, depth bound, and the `seed_floor` distractor guard.
 
 ## Deploy (Asset Bundle)
