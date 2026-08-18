@@ -49,7 +49,16 @@ SELECT
 FROM ${var.catalog}.${var.schema}.doc_text
 LATERAL VIEW posexplode(
     split(text, '(?<=[.!?])\\s+')
-) AS p;
+) AS p
+-- Drop empty passages: split() on text with trailing whitespace yields an empty trailing
+-- element, and step 3 bills a model call per row — so an empty passage is a paid no-op.
+WHERE nullif(trim(p.col), '') IS NOT NULL;
+
+-- Surface parse failures rather than letting documents vanish. A file with a non-empty
+-- error_status produces NULL text and would silently disappear from `passages`.
+SELECT doc_id, error_status
+FROM ${var.catalog}.${var.schema}.doc_text
+WHERE error_status IS NOT NULL OR nullif(trim(text), '') IS NULL;
 
 -- 3) EXTRACT — typed triples per passage via ai_query with a constrained response schema.
 --    The schema keeps the model inside the entity types you allow and keeps the output
@@ -77,12 +86,20 @@ SELECT
                 'the text explicitly states; if the text states none, return an empty array. ',
                 'Text: ', text
             ),
+            -- `required` + `additionalProperties:false` matter: without them the model may
+            -- legally omit `subject` or `confidence`, from_json yields NULLs, and the
+            -- downstream handoff receives rows it cannot resolve. `confidence` is bounded to
+            -- [0, 1] because gold_triplets_mapping.sql NULLs out-of-range values — a model
+            -- answering 95 instead of 0.95 would silently lose its provenance.
             responseFormat => '{"type":"json_schema","json_schema":{"name":"extraction",
-                "schema":{"type":"object","properties":{"triples":{"type":"array","items":
-                {"type":"object","properties":{"subject":{"type":"string"},
+                "schema":{"type":"object","additionalProperties":false,
+                "required":["triples"],"properties":{"triples":{"type":"array","items":
+                {"type":"object","additionalProperties":false,
+                "required":["subject","subject_type","predicate","object","object_type",
+                "confidence"],"properties":{"subject":{"type":"string"},
                 "subject_type":{"type":"string"},"predicate":{"type":"string"},
                 "object":{"type":"string"},"object_type":{"type":"string"},
-                "confidence":{"type":"number"}}}}}},"strict":true}}'
+                "confidence":{"type":"number","minimum":0,"maximum":1}}}}}},"strict":true}}'
         ),
         'STRUCT<triples: ARRAY<STRUCT<subject:STRING, subject_type:STRING, predicate:STRING,
                 object:STRING, object_type:STRING, confidence:DOUBLE>>>'
@@ -102,24 +119,51 @@ SELECT
 FROM ${var.catalog}.${var.schema}.raw_triplets
 LATERAL VIEW explode(triples) AS t;
 
+-- 3b) UNPIVOT to surface forms. Entity resolution compares *names*, but a mention carries
+--     TWO of them (subject and object), so flatten before blocking. This is the table step 4
+--     reads; without it step 4 has no `name`/`entity_type` column to work with.
+CREATE OR REPLACE TABLE ${var.catalog}.${var.schema}.mention_surfaces AS
+SELECT DISTINCT
+    md5(concat_ws('|', name, entity_type)) AS mention_id,
+    name,
+    entity_type
+FROM (
+    SELECT subject AS name, subject_type AS entity_type
+    FROM ${var.catalog}.${var.schema}.mentions
+    UNION ALL
+    SELECT object AS name, object_type AS entity_type
+    FROM ${var.catalog}.${var.schema}.mentions
+)
+WHERE nullif(trim(name), '') IS NOT NULL;
+
 -- 4) ENTITY-RESOLUTION BLOCKING (on Lakebase) — generate candidate pairs with pg_trgm rather
---    than comparing every mention to every other. This is the same fuzzy match the serve layer
---    uses, pulled up into the build. The merge itself (union-find plus canonical selection) is
---    graph_upstream.resolve_entities().
+--    than comparing every surface form to every other. The merge itself (union-find plus
+--    canonical selection) is graph_upstream.resolve_entities().
 --
 --    Requires on the Lakebase side:  CREATE EXTENSION IF NOT EXISTS pg_trgm;
 --    plus a trigram index:           CREATE INDEX ... USING gin (name gin_trgm_ops);
 --    (graph.nodes already has nodes_name_trgm in sql/schema.sql — mirror it for mentions.)
+--
+--    IMPORTANT: block on BOTH measures. `similarity()` is Jaccard, which misses exactly the
+--    alias case that matters — "Acme Foods" vs "Acme Foods Incorporated" scores 0.42 and would
+--    never be proposed as a candidate, so resolve_entities() would never get the chance to
+--    merge it and its containment path would be unreachable. `word_similarity()` (operator
+--    `<%`) is the containment measure; it is asymmetric, so take the greatest of both
+--    directions. This mirrors trigram_sim + trigram_containment in graph_upstream.py.
 SELECT
-    a.mention_id           AS a_id,
-    b.mention_id           AS b_id,
-    similarity(a.name, b.name) AS sim
-FROM graph.mentions a
-JOIN graph.mentions b
+    a.mention_id AS a_id,
+    b.mention_id AS b_id,
+    a.name       AS a_name,
+    b.name       AS b_name,
+    similarity(a.name, b.name)                                                AS jaccard_sim,
+    greatest(word_similarity(a.name, b.name), word_similarity(b.name, a.name)) AS containment
+FROM mention_surfaces a
+JOIN mention_surfaces b
   ON a.entity_type = b.entity_type      -- only same-type forms are candidates
  AND a.mention_id < b.mention_id        -- each unordered pair once
- AND a.name % b.name                    -- pg_trgm threshold (pg_trgm.similarity_threshold)
-WHERE similarity(a.name, b.name) >= 0.55;
+ AND (a.name % b.name OR a.name <% b.name OR b.name <% a.name)
+WHERE similarity(a.name, b.name) >= 0.55
+   OR greatest(word_similarity(a.name, b.name), word_similarity(b.name, a.name)) >= 0.8;
 
 -- The resolved triples land in the 8-column gold_triplets contract
 -- (sql/gold_triplets_mapping.sql), so everything downstream — embeddings, HNSW, the recursive

@@ -135,9 +135,11 @@ graphrag/
 ├── sql/
 │   ├── schema.sql              # nodes / edges / node_embeddings + HNSW / ltree / pg_trgm
 │   ├── graphrag_retrieval.sql  # hybrid: pgvector seed (+ seed_floor) → recursive-CTE expansion → ranked context
-│   └── gold_triplets_mapping.sql  # portable 8-column triplet view over nodes/edges (cross-stack interop)
+│   ├── gold_triplets_mapping.sql  # portable 8-column triplet view over nodes/edges (cross-stack interop)
+│   └── upstream_ai_functions.sql  # parse + typed extract (AI Functions) + pg_trgm blocking
 ├── graph_build.py       # pure assemble_graph(dims, enrichment) → (nodes, edges); guards the FK
 ├── graph_retrieve.py    # pure in-memory twin of the retrieval SQL (for offline dev/test)
+├── graph_upstream.py    # documents → chunk → extract → entity resolution → gold_triplets
 ├── notebooks/
 │   └── graphrag_build_and_query.py   # build the graph, embed, write to Lakebase, query
 └── smoketest/
@@ -153,7 +155,7 @@ cd agents/graphrag
 uv run --python 3.11 --with duckdb --with numpy smoketest/graphrag_logic_smoketest.py
 ```
 
-67 assertions: semantic seed, graph expansion surfacing connected context flat RAG misses,
+82 assertions: semantic seed, graph expansion surfacing connected context flat RAG misses,
 dangling-edge guard, blended-score ranking, depth bound, and the `seed_floor` distractor guard.
 
 ## Deploy (Asset Bundle)
