@@ -11,6 +11,9 @@ WHAT THIS PROVES (offline, no Databricks / no Lakebase / no model endpoint):
      structured dims + LLM enrichment into the intended nodes/edges.
   5. The `seed_floor` distractor guard drops weak semantic seeds before the walk,
      and its -1.0 default leaves the pre-floor behavior unchanged.
+  6. The UPSTREAM indexing path (graph_upstream): chunking keeps stable ids and
+     overlap, trigram entity resolution collapses alias spellings into one node,
+     and the emitted rows conform to the 8-column gold_triplets contract.
 
 WHAT THIS DOES NOT COVER (needs live Lakebase, tracked in README):
   - pgvector's actual HNSW ANN operator (<=>) and index behavior — here we
@@ -296,6 +299,221 @@ def main() -> int:
     zeroed = agent_retrieve(q, bnodes, bedges, zero_emb, seed_k=6, max_hops=2, seed_floor=-1.0)
     check("all-zero embedding never becomes a seed",
           "product:261" not in [r["node_id"] for r in zeroed[:1]], True)
+
+    # ---- 7) UPSTREAM indexing: documents -> gold_triplets
+    print("\n== TEST 7: upstream indexing (chunk -> extract -> resolve -> triplets) ==")
+    from graph_upstream import (  # noqa: E402
+        DEFAULT_PREDICATES,
+        SYMMETRIC_PREDICATES,
+        Mention,
+        build_gold_triplets,
+        canonical_id,
+        chunk,
+        index_document,
+        normalize_predicate,
+        resolve_entities,
+        trigram_containment,
+        trigram_sim,
+    )
+
+    # -- chunking: stable ids, sentence-aware packing, bounded size, word-safe overlap
+    doc = ("Acme Foods supplies skim milk. ACME Foods Inc. is based in Boston. "
+           "Northeast demand for skim milk is surging. Acme ships from Boston daily. "
+           "Whole milk substitutes for skim milk in most recipes.")
+    passages = chunk("doc:1", doc, size=80, overlap=20)
+    check("chunking produced multiple passages", len(passages) > 1, True)
+    check("chunk ids are stable and ordered",
+          [p.chunk_id for p in passages][:2], ["doc:1:c0", "doc:1:c1"])
+    check("every passage keeps its doc pointer",
+          all(p.doc_id == "doc:1" for p in passages), True)
+    check("no passage is empty", all(p.text.strip() for p in passages), True)
+    # a run with NO sentence terminator must still be bounded: parsed PDFs (tables, slides, OCR)
+    # routinely contain these, and extraction sends one model call per passage.
+    unpunctuated = chunk("doc:2", "word " * 200, size=60)
+    check("text without sentence terminators is still split",
+          len(unpunctuated) > 1, True)
+    # The guarantee that matters is that a long unpunctuated run does NOT become one
+    # whole-document passage sent to the model as a single prompt. The exact ceiling is
+    # size plus carried overlap plus the last packed segment, so bound it at 2x size
+    # rather than asserting an off-by-a-word figure.
+    check("no passage approaches the whole document",
+          max(len(p.text) for p in unpunctuated) <= 2 * 60, True)
+    check("a 1000-char unpunctuated run yields many passages, not one",
+          len(unpunctuated) >= 10, True)
+    check("overlap does not start a passage mid-word",
+          all(not p.text.startswith(" ") for p in passages), True)
+
+    # -- trigram measures
+    check("alias pair scores above the merge threshold",
+          trigram_sim("Acme Foods", "ACME Foods Inc.") >= 0.55, True)
+    check("unrelated pair scores below the merge threshold",
+          trigram_sim("Acme Foods", "Diesel Generator") < 0.55, True)
+    check("trigram similarity is symmetric",
+          round(trigram_sim("Acme", "ACME Foods"), 6)
+          == round(trigram_sim("ACME Foods", "Acme"), 6), True)
+    check("Jaccard MISSES the legal-suffix alias (why containment exists)",
+          trigram_sim("Acme Foods", "Acme Foods Incorporated") < 0.55, True)
+    check("containment catches the legal-suffix alias",
+          trigram_containment("Acme Foods", "Acme Foods Incorporated") >= 0.8, True)
+    check("containment still rejects an unrelated pair",
+          trigram_containment("Acme Foods", "Diesel Generator") < 0.8, True)
+
+    # -- entity resolution: three spellings of one company collapse to a single canonical node
+    mentions = [
+        Mention("Acme Foods", "Company", "SUPPLIED_BY", "Skim Milk 2L", "Product", 0.9, "doc:1:c0"),
+        Mention("ACME Foods Inc.", "Company", "LOCATED_IN", "Boston", "Location", 0.8, "doc:1:c1"),
+        Mention("Acme", "Company", "LOCATED_IN", "Boston", "Location", 0.7, "doc:1:c3"),
+    ]
+    res = resolve_entities(mentions)
+    company_ids = {res.canonical_id[(n, "Company")]
+                   for n in ("Acme Foods", "ACME Foods Inc.", "Acme")}
+    check("three alias spellings collapse to ONE canonical id", len(company_ids), 1)
+    check("canonical display name is the fullest spelling",
+          res.canonical_name[company_ids.pop()], "ACME Foods Inc.")
+    check("each merged alias is recorded for audit", len(res.same_as), 2)
+    check("canonical ids carry a type prefix (graph_build convention)",
+          res.canonical_id[("Acme Foods", "Company")].startswith("company:"), True)
+
+    # -- same NAME, different TYPE must stay distinct. Resolution is keyed by (surface, type),
+    #    so the two get separate ids; keying on the surface alone silently merged them into one
+    #    graph.nodes row with two conflicting node_types.
+    dual = [
+        Mention("Acme Foods", "Company", "LOCATED_IN", "Boston", "Location", 0.9, "c0"),
+        Mention("Acme Foods", "Product", "BELONGS_TO", "Dairy", "Category", 0.9, "c1"),
+    ]
+    dres = resolve_entities(dual)
+    check("same name + different type get DIFFERENT canonical ids",
+          dres.canonical_id[("Acme Foods", "Company")]
+          != dres.canonical_id[("Acme Foods", "Product")], True)
+    drows = build_gold_triplets(dual, dres)
+    by_id = {}
+    for r in drows:
+        by_id.setdefault(r["subject_id"], set()).add(r["subject_type"])
+        by_id.setdefault(r["object_id"], set()).add(r["object_type"])
+    check("no node id carries two conflicting types",
+          all(len(v) == 1 for v in by_id.values()), True)
+
+    # -- contract conformance
+    CONTRACT = {"subject_id", "subject_type", "predicate", "object_id", "object_type",
+                "confidence", "source_method", "source_agent"}
+    rows = build_gold_triplets(mentions, res)
+    check("every row carries exactly the 8 contract columns",
+          all(set(r) == CONTRACT for r in rows), True)
+    check("relations are attributed to llm_extract",
+          {r["source_method"] for r in rows if r["predicate"] != "SAME_AS"}, {"llm_extract"})
+    check("alias edges are attributed to entity_resolution",
+          {r["source_method"] for r in rows if r["predicate"] == "SAME_AS"}, {"entity_resolution"})
+    check("subjects/objects were rewritten to canonical ids",
+          all(":" in r["subject_id"] and ":" in r["object_id"] for r in rows), True)
+    # SAME_AS rows must carry the node's REAL type, not a literal "Entity"
+    same_as_types = {r["subject_type"] for r in rows if r["predicate"] == "SAME_AS"}
+    check("SAME_AS rows carry the resolved type, not 'Entity'",
+          "Entity" not in same_as_types, True)
+    # no self-loops: case/punctuation variants slug identically and would violate the
+    # (src_id, dst_id, rel) primary key on graph.edges
+    variants = [
+        Mention("ACME Foods Inc.", "Company", "LOCATED_IN", "Boston", "Location", 0.9, "c0"),
+        Mention("ACME Foods Inc", "Company", "LOCATED_IN", "Boston", "Location", 0.9, "c1"),
+        Mention("acme foods inc", "Company", "LOCATED_IN", "Boston", "Location", 0.9, "c2"),
+    ]
+    vrows = build_gold_triplets(variants, resolve_entities(variants))
+    check("no self-referential rows (would break the edges primary key)",
+          [r for r in vrows if r["subject_id"] == r["object_id"]], [])
+    check("no duplicate (subject, predicate, object) rows",
+          len({(r["subject_id"], r["predicate"], r["object_id"]) for r in vrows}), len(vrows))
+
+    # -- confidence: absent / malformed / out-of-range become None, matching the SQL view
+    conf_cases = [
+        Mention("A Co", "Company", "LOCATED_IN", "Boston", "Location", None, "c0"),
+        Mention("B Co", "Company", "LOCATED_IN", "Boston", "Location", 95, "c1"),
+        Mention("C Co", "Company", "LOCATED_IN", "Boston", "Location", "high", "c2"),
+        Mention("D Co", "Company", "LOCATED_IN", "Boston", "Location", 0.85, "c3"),
+    ]
+    crows = {r["subject_id"]: r["confidence"]
+             for r in build_gold_triplets(conf_cases, resolve_entities(conf_cases))}
+    check("missing confidence -> None", crows["company:a_co"], None)
+    check("out-of-range confidence -> None", crows["company:b_co"], None)
+    check("non-numeric confidence -> None", crows["company:c_co"], None)
+    check("valid confidence preserved", crows["company:d_co"], 0.85)
+
+    # -- a mention missing a subject/object/predicate is skipped, not crashed on
+    junk = [
+        Mention(None, "Company", "LOCATED_IN", "Boston", "Location", 0.9, "c0"),
+        Mention("A Co", "Company", None, "Boston", "Location", 0.9, "c1"),
+        Mention("A Co", "Company", "LOCATED_IN", "", "Location", 0.9, "c2"),
+        Mention("A Co", "Company", "LOCATED_IN", "Boston", "Location", 0.9, "c3"),
+    ]
+    jrows = build_gold_triplets(junk, resolve_entities(junk))
+    check("malformed mentions are skipped, valid one survives",
+          [r["predicate"] for r in jrows], ["LOCATED_IN"])
+
+    # -- symmetric predicates stored ONCE with sorted endpoints, matching graph_build.py
+    sym = [
+        Mention("Skim Milk", "Product", "SUBSTITUTE_FOR", "Whole Milk", "Product", 0.9, "c0"),
+        Mention("Whole Milk", "Product", "SUBSTITUTE_FOR", "Skim Milk", "Product", 0.9, "c1"),
+    ]
+    sym_rows = build_gold_triplets(sym, resolve_entities(sym))
+    sub = [r for r in sym_rows if r["predicate"] == "SUBSTITUTE_FOR"]
+    check("SUBSTITUTE_FOR is emitted once, not both directions", len(sub), 1)
+    check("symmetric endpoints are sorted", sub[0]["subject_id"] <= sub[0]["object_id"], True)
+    check("SUBSTITUTE_FOR is declared symmetric",
+          "SUBSTITUTE_FOR" in SYMMETRIC_PREDICATES, True)
+    # SAME_AS is directional by design (alias -> canonical) and must NOT be symmetric
+    check("SAME_AS is NOT symmetric (stays directional)",
+          "SAME_AS" not in SYMMETRIC_PREDICATES, True)
+
+    # -- relation vocabulary, normalized before the membership test
+    check("normalize_predicate uppercase-snakes a raw phrase",
+          normalize_predicate("is based in"), "IS_BASED_IN")
+    formatted = [
+        Mention("Acme", "Company", "located_in", "Boston", "Location", 0.9, "c0"),
+        Mention("Milk", "Product", "SUPPLIED BY", "Acme", "Company", 0.9, "c1"),
+        Mention("Acme", "Company", "IS_PRIMARY_DAIRY_SUPPLIER_IN", "Boston", "Location", 0.9, "c2"),
+    ]
+    fres = resolve_entities(formatted)
+    dropped = build_gold_triplets(formatted, fres,
+                                  allowed_predicates=DEFAULT_PREDICATES, on_unknown="drop")
+    preds_kept = sorted(r["predicate"] for r in dropped if r["predicate"] != "SAME_AS")
+    # lowercase and space-separated in-vocabulary predicates must SURVIVE normalization
+    check("lowercase/spaced in-vocabulary predicates survive the allowlist",
+          preds_kept, ["LOCATED_IN", "SUPPLIED_BY"])
+    kept_all = build_gold_triplets(formatted, fres)
+    check("default keeps out-of-vocabulary predicates",
+          "IS_PRIMARY_DAIRY_SUPPLIER_IN" in {r["predicate"] for r in kept_all}, True)
+    check("the example's relation vocabulary matches sql/schema.sql",
+          DEFAULT_PREDICATES,
+          frozenset({"SUPPLIED_BY", "LOCATED_IN", "BELONGS_TO", "SUBSTITUTE_FOR", "SURGES_IN"}))
+    # an invalid on_unknown must fail loudly rather than silently disable the backstop
+    try:
+        build_gold_triplets(formatted, fres, allowed_predicates=DEFAULT_PREDICATES,
+                            on_unknown="DROP")
+        check("invalid on_unknown raises", False, True)
+    except ValueError:
+        check("invalid on_unknown raises ValueError", True, True)
+
+    # -- end to end through index_document with a deterministic stub extractor
+    def stub_extractor(ps):
+        out = []
+        for p in ps:
+            if "supplies" in p.text.lower():
+                out.append(Mention("Acme Foods", "Company", "SUPPLIED_BY", "Skim Milk 2L",
+                                   "Product", 0.9, p.chunk_id))
+            if "boston" in p.text.lower():
+                out.append(Mention("ACME Foods Inc.", "Company", "LOCATED_IN", "Boston",
+                                   "Location", 0.85, p.chunk_id))
+        return out
+
+    e2e = index_document("doc:1", doc, stub_extractor)
+    check("index_document emits rows", len(e2e) > 0, True)
+    check("end-to-end rows conform to the contract",
+          all(set(r) == CONTRACT for r in e2e), True)
+    preds = {r["predicate"] for r in e2e}
+    check("end-to-end captured the SUPPLIED_BY relation", "SUPPLIED_BY" in preds, True)
+    check("end-to-end merged the company aliases (SAME_AS emitted)", "SAME_AS" in preds, True)
+    check("duplicate relations across chunks are de-duplicated",
+          len([r for r in e2e if r["predicate"] == "LOCATED_IN"]), 1)
+    check("canonical_id is a stable, type-prefixed slug",
+          canonical_id("ACME Foods Inc.", "Company"), "company:acme_foods_inc")
 
     print("\n" + "=" * 60)
     if FAILURES:

@@ -33,6 +33,48 @@ Lakebase extensions:
 Position it as *"graph traversal via recursive CTEs + semantic retrieval via pgvector"* — great for
 bounded k-hop operational retrieval; **not** a billion-edge graph-analytics engine.
 
+## Building the graph from documents (upstream indexing)
+
+`graph_build.py` starts from *structured* dims. If your source is documents, `graph_upstream.py`
+covers the phase before that:
+
+```
+parse (ai_parse_document) -> chunk -> extract (ai_query, constrained schema)
+  -> entity resolution (trigram + union-find) -> gold_triplets
+```
+
+Chunking, entity resolution and triplet assembly are pure Python and covered by the offline smoke
+test. The two steps that need a workspace — parse and extract — are in
+[`sql/upstream_ai_functions.sql`](sql/upstream_ai_functions.sql).
+
+Two things matter more than the rest, both learned from running this live:
+
+- **Entity resolution is the load-bearing step.** The same entity appears written many ways
+  ("Acme", "Acme Foods", "ACME Foods Inc."), and each spelling would otherwise become its own
+  node — fragmenting the graph exactly where multi-hop retrieval needs it joined. Note that
+  Jaccard trigram similarity alone is *not* enough: "Acme Foods" vs "Acme Foods Incorporated"
+  scores only `0.42`, so legal suffixes and abbreviations slip past it. `resolve_entities()` also
+  applies a containment measure (the shape of `pg_trgm`'s `word_similarity()`), which scores that
+  pair `0.92`. Merges are written back as `SAME_AS` edges so the decision is auditable in the
+  graph rather than lost in the pipeline.
+- **Pin the relation vocabulary.** Constraining entity types is not enough. Left free, the model
+  invents a predicate per sentence — a live run over two short documents produced
+  `SUPPLIES_TO_RETAILERS_ACROSS`, `OPERATES_DISTRIBUTION_CENTER_IN`, `IS_LOCATED_IN` and
+  `BELONGS_TO_CATEGORY`, the last two near-misses for this schema's `LOCATED_IN` and
+  `BELONGS_TO`. Every spelling becomes its own edge label and the typed-path logic in the
+  retrieval SQL degrades toward an untyped walk. Constrain the predicate list in the prompt, and
+  pass `allowed_predicates=DEFAULT_PREDICATES, on_unknown="drop"` as a backstop.
+
+Two AI-Functions details the SQL had wrong until it was run against a live workspace, both now
+fixed and commented in place:
+
+- **`ai_parse_document` has no `document.text` field.** It returns schema v2.0, whose text lives
+  in `document.elements[].content` with a `type` per element. Reading `parsed:document.text`
+  yields NULL and the pipeline silently produces nothing — concatenate the text elements instead.
+- **`ai_query`'s DDL-string `responseFormat` rejects a top-level array.** Use the JSON-schema form
+  to constrain the model and `from_json` to type the result. The SQL carries the exact error you
+  get otherwise.
+
 ## Operational guardrails
 
 Defaults that keep retrieval fast, precise, and cost-predictable on real Lakebase:
@@ -93,9 +135,11 @@ graphrag/
 ├── sql/
 │   ├── schema.sql              # nodes / edges / node_embeddings + HNSW / ltree / pg_trgm
 │   ├── graphrag_retrieval.sql  # hybrid: pgvector seed (+ seed_floor) → recursive-CTE expansion → ranked context
-│   └── gold_triplets_mapping.sql  # portable 8-column triplet view over nodes/edges (cross-stack interop)
+│   ├── gold_triplets_mapping.sql  # portable 8-column triplet view over nodes/edges (cross-stack interop)
+│   └── upstream_ai_functions.sql  # parse + typed extract (AI Functions) + pg_trgm blocking
 ├── graph_build.py       # pure assemble_graph(dims, enrichment) → (nodes, edges); guards the FK
 ├── graph_retrieve.py    # pure in-memory twin of the retrieval SQL (for offline dev/test)
+├── graph_upstream.py    # documents → chunk → extract → entity resolution → gold_triplets
 ├── notebooks/
 │   └── graphrag_build_and_query.py   # build the graph, embed, write to Lakebase, query
 └── smoketest/
@@ -111,7 +155,7 @@ cd agents/graphrag
 uv run --python 3.11 --with duckdb --with numpy smoketest/graphrag_logic_smoketest.py
 ```
 
-35 assertions: semantic seed, graph expansion surfacing connected context flat RAG misses,
+82 assertions: semantic seed, graph expansion surfacing connected context flat RAG misses,
 dangling-edge guard, blended-score ranking, depth bound, and the `seed_floor` distractor guard.
 
 ## Deploy (Asset Bundle)
