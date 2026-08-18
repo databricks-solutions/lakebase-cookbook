@@ -29,7 +29,11 @@ def retrieve(query_embedding, nodes, edges, embeddings, seed_k=2, max_hops=2, li
       embeddings: dict node_id -> list[float]
       seed_floor: min cosine similarity a seed must clear. Cosine ranges [-1, 1], so the
         default -1.0 keeps ALL candidates (identical to the pre-floor behavior). Raise it
-        toward e.g. 0.3 to drop weak seeds that drag unrelated subgraphs into the ranking.
+        to drop weak seeds that drag unrelated subgraphs into the ranking. Calibrate it to
+        your embedding model's observed similarity range, not to a fixed number — the useful
+        band is model-specific (measured on live Lakebase with databricks-gte-large-en, the
+        example graph's similarities span 0.38-0.71, so a floor of 0.3 is a no-op and ~0.55
+        is where the distractors drop out).
     Returns: list of dicts {node_id,node_type,name,nearest_hop,rels,score} desc by score.
     """
     # 1) semantic seed — top-k by cosine similarity, above the seed_floor

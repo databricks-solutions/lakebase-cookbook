@@ -41,7 +41,12 @@ Defaults that keep retrieval fast, precise, and cost-predictable on real Lakebas
   dense graph the walk approaches a full-graph scan (seconds), while 2 hops stays in the tens of ms
   even at ~1M nodes / 10M edges. Raise hops only on sparse graphs.
 - **Set a `seed_floor` under distractor-heavy corpora.** Weak semantic seeds drag unrelated subgraphs
-  into the ranking and dilute precision; a cosine floor (e.g. `0.3`) drops them. Cosine ranges
+  into the ranking and dilute precision; a cosine floor drops them. **Calibrate the floor to
+  your embedding model's actual similarity distribution** — it is not a portable constant.
+  Measured on live Lakebase with `databricks-gte-large-en`, this example graph's node
+  similarities span only `0.38`-`0.71`, so a `0.3` floor changes nothing while `0.555` drops
+  every distractor and keeps every on-topic node (the on-topic supplier below the floor still
+  arrives via graph expansion). Cosine ranges
   `[-1, 1]`, so the default `-1.0` keeps all seeds (identical to no floor). See `:seed_floor` in
   [`sql/graphrag_retrieval.sql`](sql/graphrag_retrieval.sql).
 - **Keep a minimum Lakebase compute above zero for latency-sensitive serving.** After scale-to-zero,

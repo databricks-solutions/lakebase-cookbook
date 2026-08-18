@@ -140,7 +140,7 @@ uv run --python 3.11 --with duckdb --with numpy smoketest/graphrag_logic_smokete
 |--------------------|---------|
 | `lakebase_database` | Full Lakebase database resource path (required). |
 | `max_hops` | Traversal depth from the seeds. `2` is the sweet spot; higher pulls in more distant (and lower-scored) context at the cost of a wider recursive walk. |
-| `seed_floor` | Minimum cosine similarity a semantic seed must clear before it enters the graph walk. Cosine ranges `[-1, 1]`, so the default `-1.0` keeps every seed (identical to no floor). Raise it toward `0.3` on distractor-heavy corpora, where weak seeds bridge into unrelated subgraphs and dilute precision. |
+| `seed_floor` | Minimum cosine similarity a semantic seed must clear before it enters the graph walk. Cosine ranges `[-1, 1]`, so the default `-1.0` keeps every seed (identical to no floor). Raise it on distractor-heavy corpora, where weak seeds bridge into unrelated subgraphs and dilute precision. Calibrate to your embedding model's observed range rather than a fixed constant: measured live with `databricks-gte-large-en`, this graph's similarities span `0.38`-`0.71`, so `0.3` is a no-op and `0.555` is where the distractors drop. |
 | `VECTOR(1024)` | Embedding dimension — must match your embeddings endpoint (1024 for `databricks-gte-large-en`). |
 | HNSW `m` / `ef_construction` | Index build quality vs. speed (`16` / `64` here). Raise for higher recall on larger graphs. |
 | Embeddings endpoint | Model-serving endpoint used to embed nodes and questions. |

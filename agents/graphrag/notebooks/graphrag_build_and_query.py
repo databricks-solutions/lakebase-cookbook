@@ -126,7 +126,8 @@ print("Complete the cell above to apply sql/schema.sql and INSERT the graph.")
 # MAGIC Lakebase connection: pgvector cosine seed -> recursive-CTE k-hop expansion. Bind
 # MAGIC `:query_embedding` (embed the user question), `:seed_k`, `:max_hops`, `:seed_floor`
 # MAGIC (min cosine a seed must clear; `-1.0` = keep all, same as before — raise toward
-# MAGIC `0.3` to drop weak seeds). To validate the retrieval logic *without* Lakebase,
+# MAGIC a floor calibrated to your model's similarity range — ~`0.55` for
+# MAGIC `databricks-gte-large-en` on this graph). To validate the logic *without* Lakebase,
 # MAGIC run `smoketest/graphrag_logic_smoketest.py`.
 
 # COMMAND ----------

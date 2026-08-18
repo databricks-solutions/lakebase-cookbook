@@ -11,7 +11,7 @@
 --   :max_hops         INT           -- traversal depth bound (e.g. 2)
 --   :seed_floor       FLOAT         -- min cosine similarity a seed must clear. Cosine ranges
 --                                      [-1, 1], so -1.0 keeps ALL seeds (same as no floor).
---                                      Raise toward e.g. 0.3 to guard against distractor
+--                                      Raise it to guard against distractor
 --                                      pollution: under heavy off-topic content, weak seeds
 --                                      drag unrelated subgraphs in and dilute the ranking.
 --
