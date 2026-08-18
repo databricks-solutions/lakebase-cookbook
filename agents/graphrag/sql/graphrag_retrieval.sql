@@ -9,6 +9,22 @@
 --   :query_embedding  VECTOR(1024)  -- embedding of the user question (from your embeddings endpoint)
 --   :seed_k           INT           -- how many semantic seed nodes (e.g. 5)
 --   :max_hops         INT           -- traversal depth bound (e.g. 2)
+--   :seed_floor       FLOAT         -- min cosine similarity a seed must clear. Cosine ranges
+--                                      [-1, 1], so -1.0 keeps ALL seeds (same as no floor).
+--                                      Raise it to guard against distractor
+--                                      pollution: under heavy off-topic content, weak seeds
+--                                      drag unrelated subgraphs in and dilute the ranking.
+--                                      REQUIRED BIND: Postgres has no server-side default for a
+--                                      named parameter, so you must pass this even to keep the
+--                                      old behavior — bind -1.0 for "no floor". Omitting it
+--                                      raises "bind message supplies 2 parameters, but prepared
+--                                      statement requires 3".
+--                                      Calibrate it to your embedding model's observed range,
+--                                      not to a fixed constant (see README).
+--
+-- Empty-seed caveat: if the floor exceeds every node's similarity, the seed CTE is
+-- empty and this statement returns ZERO rows. Have the caller detect that and either
+-- retry at -1.0 or decline to answer — never synthesize from empty context.
 --
 -- Distance: cosine. pgvector '<=>' returns cosine DISTANCE (0=identical),
 -- so similarity = 1 - distance. HNSW index (vector_cosine_ops) backs the ORDER BY.
@@ -21,6 +37,14 @@ seed AS (
         e.node_id,
         1 - (e.embedding <=> :query_embedding) AS similarity
     FROM graph.node_embeddings e
+    -- Drop weak seeds (distractor guard; -1.0 = keep all). Expressed on cosine
+    -- DISTANCE rather than similarity — equivalent for real vectors
+    -- (sim >= floor  <=>  dist <= 1 - floor) but it also excludes NaN, which
+    -- pgvector returns for a zero-norm embedding. NaN compares GREATER than every
+    -- float in Postgres, so a similarity form (`1 - dist >= :seed_floor`) admits
+    -- such a row at any floor; NaN then propagates through the score and sorts
+    -- FIRST under ORDER BY ... DESC, putting a garbage node at rank 1.
+    WHERE (e.embedding <=> :query_embedding) <= (1 - :seed_floor)
     ORDER BY e.embedding <=> :query_embedding      -- HNSW ANN scan
     LIMIT :seed_k
 ),

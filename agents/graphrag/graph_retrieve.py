@@ -18,7 +18,8 @@ def cosine(a, b) -> float:
     return dot / (na * nb)
 
 
-def retrieve(query_embedding, nodes, edges, embeddings, seed_k=2, max_hops=2, limit=25):
+def retrieve(query_embedding, nodes, edges, embeddings, seed_k=2, max_hops=2, limit=25,
+             seed_floor=-1.0):
     """Mirror of graphrag_retrieval.sql.
 
     Args:
@@ -26,11 +27,26 @@ def retrieve(query_embedding, nodes, edges, embeddings, seed_k=2, max_hops=2, li
       nodes: dict node_id -> {"node_type","name","props",...}
       edges: iterable of (src_id, dst_id, rel)
       embeddings: dict node_id -> list[float]
+      seed_floor: min cosine similarity a seed must clear. Cosine ranges [-1, 1], so the
+        default -1.0 keeps ALL candidates (identical to the pre-floor behavior). Raise it
+        to drop weak seeds that drag unrelated subgraphs into the ranking. Calibrate it to
+        your embedding model's observed similarity range, not to a fixed number — the useful
+        band is model-specific (measured on live Lakebase with databricks-gte-large-en, the
+        example graph's similarities span 0.38-0.71, so a floor of 0.3 is a no-op and ~0.55
+        is where the distractors drop out).
     Returns: list of dicts {node_id,node_type,name,nearest_hop,rels,score} desc by score.
     """
-    # 1) semantic seed — top-k by cosine similarity
+    # 1) semantic seed — top-k by cosine similarity, above the seed_floor.
+    #    `any(emb)` skips a degenerate all-zero embedding: it has no direction, so its
+    #    similarity is undefined. The SQL twin excludes the same case by comparing on
+    #    cosine DISTANCE, which pgvector returns as NaN for a zero-norm vector (and NaN
+    #    would otherwise pass any floor, since NaN > every float in Postgres).
     sims = sorted(
-        ((nid, cosine(query_embedding, emb)) for nid, emb in embeddings.items()),
+        (
+            (nid, sim)
+            for nid, emb in embeddings.items()
+            if any(emb) and (sim := cosine(query_embedding, emb)) >= seed_floor
+        ),
         key=lambda x: x[1], reverse=True,
     )[:seed_k]
 

@@ -9,6 +9,8 @@ WHAT THIS PROVES (offline, no Databricks / no Lakebase / no model endpoint):
      neighbors and decays with hop distance.
   4. The BUILD-side graph assembly (notebooks/graph_build.assemble_graph) turns
      structured dims + LLM enrichment into the intended nodes/edges.
+  5. The `seed_floor` distractor guard drops weak semantic seeds before the walk,
+     and its -1.0 default leaves the pre-floor behavior unchanged.
 
 WHAT THIS DOES NOT COVER (needs live Lakebase, tracked in README):
   - pgvector's actual HNSW ANN operator (<=>) and index behavior — here we
@@ -244,6 +246,56 @@ def main() -> int:
     check("top result is skim milk", ranked[0]["node_id"], "product:122")
     check("expands to a supplier", "supplier:S2" in ranked_ids, True)
     check("excludes unrelated generator", "product:261" not in ranked_ids, True)
+
+    # ---- 6) seed_floor: the distractor guard on the semantic seed
+    print("\n== TEST 6: seed_floor distractor guard ==")
+    # Cosine similarities for this query against the bag-of-words embeddings:
+    #   product:122 0.577 | supplier:S2/S3/S9 0.500 | region:northeast 0.354
+    #   product:130 0.289 | category:dairy, product:261, region:west, ... 0.000
+    # supplier:S9 is the distractor bridge — it clears a loose floor on the word
+    # "supplier" alone, but the only thing it supplies is the unrelated diesel
+    # generator, so an unfloored seed drags that whole subgraph into the ranking.
+    wide = agent_retrieve(q, bnodes, bedges, a_emb, seed_k=6, max_hops=2)
+    wide_ids = [r["node_id"] for r in wide]
+    check("no floor: distractor generator pulled in", "product:261" in wide_ids, True)
+    check("no floor: distractor region pulled in", "region:west" in wide_ids, True)
+
+    # 0.55 admits only product:122 (0.577) — supplier:S9 (0.500) no longer seeds
+    floored = agent_retrieve(q, bnodes, bedges, a_emb, seed_k=6, max_hops=2, seed_floor=0.55)
+    floored_ids = [r["node_id"] for r in floored]
+    check("floor 0.55: distractor generator excluded", "product:261" not in floored_ids, True)
+    check("floor 0.55: distractor region excluded", "region:west" not in floored_ids, True)
+    check("floor 0.55: on-topic seed still ranks first",
+          floored[0]["node_id"] if floored else None, "product:122")
+    check("floor 0.55: narrows the result set", len(floored) < len(wide), True)
+    check("floor 0.55: keeps the on-topic supplier via graph expansion",
+          "supplier:S2" in floored_ids, True)
+
+    # Backward compatibility, pinned to the EXPECTED set rather than to another call
+    # with the same default (which would be tautological). These 10 ids are the whole
+    # graph — the pre-floor code returned exactly this for seed_k=6, max_hops=2.
+    expected_unfloored = [
+        "category:dairy", "category:equipment", "product:122", "product:130",
+        "product:261", "region:northeast", "region:west",
+        "supplier:S2", "supplier:S3", "supplier:S9",
+    ]
+    check("default floor reproduces the pre-floor result set",
+          sorted(wide_ids), expected_unfloored)
+
+    # a floor above every candidate's similarity admits no seeds at all -> zero rows.
+    # NOTE this is the documented failure mode of an over-set floor: the caller must
+    # detect the empty result and retry at -1.0 rather than answer from no context.
+    check("floor above max similarity returns nothing",
+          agent_retrieve(q, bnodes, bedges, a_emb, seed_k=6, seed_floor=0.99), [])
+
+    # a degenerate all-zero embedding has undefined similarity and must never seed.
+    # In SQL, pgvector returns NaN for it and NaN > every float, so a similarity-form
+    # floor would admit it and NaN would sort FIRST; both sides exclude it instead.
+    zero_emb = dict(a_emb)
+    zero_emb["product:261"] = [0.0] * len(q)
+    zeroed = agent_retrieve(q, bnodes, bedges, zero_emb, seed_k=6, max_hops=2, seed_floor=-1.0)
+    check("all-zero embedding never becomes a seed",
+          "product:261" not in [r["node_id"] for r in zeroed[:1]], True)
 
     print("\n" + "=" * 60)
     if FAILURES:

@@ -124,16 +124,19 @@ print("Complete the cell above to apply sql/schema.sql and INSERT the graph.")
 # MAGIC ## 4. Query — hybrid GraphRAG retrieval — ✍️ COMPLETE THIS
 # MAGIC Once the graph is loaded (step 3), run `sql/graphrag_retrieval.sql` against the same
 # MAGIC Lakebase connection: pgvector cosine seed -> recursive-CTE k-hop expansion. Bind
-# MAGIC `:query_embedding` (embed the user question), `:seed_k`, `:max_hops`. To validate the
-# MAGIC retrieval logic *without* Lakebase, run `smoketest/graphrag_logic_smoketest.py`.
+# MAGIC `:query_embedding` (embed the user question), `:seed_k`, `:max_hops`, `:seed_floor`
+# MAGIC (min cosine a seed must clear; `-1.0` = keep all, same as before — raise toward
+# MAGIC a floor calibrated to your model's similarity range — ~`0.55` for
+# MAGIC `databricks-gte-large-en` on this graph). To validate the logic *without* Lakebase,
+# MAGIC run `smoketest/graphrag_logic_smoketest.py`.
 
 # COMMAND ----------
 
 question = "Which suppliers can cover skim milk demand surging in the Northeast?"
 q_emb = embed([question])[0]
 print(f"embedded question (dim={len(q_emb)}). Bind it as :query_embedding in "
-      "sql/graphrag_retrieval.sql with :seed_k and :max_hops, execute against Lakebase, "
-      f"then pass the ranked context to the chat endpoint for synthesis: {CHAT_ENDPOINT}")
+      "sql/graphrag_retrieval.sql with :seed_k, :max_hops, and :seed_floor (-1.0 = keep all), "
+      f"execute against Lakebase, then pass the ranked context to: {CHAT_ENDPOINT}")
 
 # COMMAND ----------
 
