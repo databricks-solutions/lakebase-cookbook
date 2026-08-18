@@ -36,12 +36,16 @@ def retrieve(query_embedding, nodes, edges, embeddings, seed_k=2, max_hops=2, li
         is where the distractors drop out).
     Returns: list of dicts {node_id,node_type,name,nearest_hop,rels,score} desc by score.
     """
-    # 1) semantic seed — top-k by cosine similarity, above the seed_floor
+    # 1) semantic seed — top-k by cosine similarity, above the seed_floor.
+    #    `any(emb)` skips a degenerate all-zero embedding: it has no direction, so its
+    #    similarity is undefined. The SQL twin excludes the same case by comparing on
+    #    cosine DISTANCE, which pgvector returns as NaN for a zero-norm vector (and NaN
+    #    would otherwise pass any floor, since NaN > every float in Postgres).
     sims = sorted(
         (
             (nid, sim)
             for nid, emb in embeddings.items()
-            if (sim := cosine(query_embedding, emb)) >= seed_floor
+            if any(emb) and (sim := cosine(query_embedding, emb)) >= seed_floor
         ),
         key=lambda x: x[1], reverse=True,
     )[:seed_k]

@@ -265,19 +265,37 @@ def main() -> int:
     floored_ids = [r["node_id"] for r in floored]
     check("floor 0.55: distractor generator excluded", "product:261" not in floored_ids, True)
     check("floor 0.55: distractor region excluded", "region:west" not in floored_ids, True)
-    check("floor 0.55: on-topic seed still ranks first", floored[0]["node_id"], "product:122")
+    check("floor 0.55: on-topic seed still ranks first",
+          floored[0]["node_id"] if floored else None, "product:122")
     check("floor 0.55: narrows the result set", len(floored) < len(wide), True)
     check("floor 0.55: keeps the on-topic supplier via graph expansion",
           "supplier:S2" in floored_ids, True)
 
-    # backward compatibility: the -1.0 default must equal an explicit no-op floor
-    explicit = agent_retrieve(q, bnodes, bedges, a_emb, seed_k=6, max_hops=2, seed_floor=-1.0)
-    check("default floor == explicit -1.0 (no behavior change)",
-          sorted(r["node_id"] for r in explicit), sorted(wide_ids))
+    # Backward compatibility, pinned to the EXPECTED set rather than to another call
+    # with the same default (which would be tautological). These 10 ids are the whole
+    # graph — the pre-floor code returned exactly this for seed_k=6, max_hops=2.
+    expected_unfloored = [
+        "category:dairy", "category:equipment", "product:122", "product:130",
+        "product:261", "region:northeast", "region:west",
+        "supplier:S2", "supplier:S3", "supplier:S9",
+    ]
+    check("default floor reproduces the pre-floor result set",
+          sorted(wide_ids), expected_unfloored)
 
-    # a floor above every candidate's similarity admits no seeds at all
+    # a floor above every candidate's similarity admits no seeds at all -> zero rows.
+    # NOTE this is the documented failure mode of an over-set floor: the caller must
+    # detect the empty result and retry at -1.0 rather than answer from no context.
     check("floor above max similarity returns nothing",
           agent_retrieve(q, bnodes, bedges, a_emb, seed_k=6, seed_floor=0.99), [])
+
+    # a degenerate all-zero embedding has undefined similarity and must never seed.
+    # In SQL, pgvector returns NaN for it and NaN > every float, so a similarity-form
+    # floor would admit it and NaN would sort FIRST; both sides exclude it instead.
+    zero_emb = dict(a_emb)
+    zero_emb["product:261"] = [0.0] * len(q)
+    zeroed = agent_retrieve(q, bnodes, bedges, zero_emb, seed_k=6, max_hops=2, seed_floor=-1.0)
+    check("all-zero embedding never becomes a seed",
+          "product:261" not in [r["node_id"] for r in zeroed[:1]], True)
 
     print("\n" + "=" * 60)
     if FAILURES:

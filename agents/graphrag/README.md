@@ -38,8 +38,9 @@ bounded k-hop operational retrieval; **not** a billion-edge graph-analytics engi
 Defaults that keep retrieval fast, precise, and cost-predictable on real Lakebase:
 
 - **Bound `max_hops` to 2 on dense graphs.** Recursive-CTE cost is *density-driven*: at 4 hops on a
-  dense graph the walk approaches a full-graph scan (seconds), while 2 hops stays in the tens of ms
-  even at ~1M nodes / 10M edges. Raise hops only on sparse graphs.
+  dense graph the walk approaches a full-graph scan, while 2 hops stays bounded. Raise hops only on
+  sparse graphs. (Indicative scale figures — tens of ms at 2 hops on ~1M nodes / 10M edges, seconds
+  at 4 hops — come from a separate benchmark of this pattern, not from this repo's smoke test.)
 - **Set a `seed_floor` under distractor-heavy corpora.** Weak semantic seeds drag unrelated subgraphs
   into the ranking and dilute precision; a cosine floor drops them. **Calibrate the floor to
   your embedding model's actual similarity distribution** — it is not a portable constant.
@@ -47,16 +48,28 @@ Defaults that keep retrieval fast, precise, and cost-predictable on real Lakebas
   similarities span only `0.38`-`0.71`, so a `0.3` floor changes nothing while `0.555` drops
   every distractor and keeps every on-topic node (the on-topic supplier below the floor still
   arrives via graph expansion). Cosine ranges
-  `[-1, 1]`, so the default `-1.0` keeps all seeds (identical to no floor). See `:seed_floor` in
+  `[-1, 1]`, so `-1.0` keeps all seeds (identical to no floor). **`:seed_floor` is a required
+  bind** — Postgres has no server-side default for a named parameter, so existing callers of the
+  SQL must pass it even to keep the old behavior (bind `-1.0`); omitting it raises
+  `bind message supplies 2 parameters, but prepared statement requires 3`. The Python twin
+  defaults it to `-1.0`, so Python callers need no change. **Watch the empty-seed case:** a floor
+  above every node's similarity empties the seed CTE and the query returns *zero* rows — detect
+  that in your caller and either retry at `-1.0` or decline to answer, rather than synthesizing
+  from no context. See `:seed_floor` in
   [`sql/graphrag_retrieval.sql`](sql/graphrag_retrieval.sql).
 - **Keep a minimum Lakebase compute above zero for latency-sensitive serving.** After scale-to-zero,
-  the first query pays a cold-start penalty (several× the warm latency) while index pages load in.
+  the first query pays a cold-start penalty of several× the warm latency while index pages load in
+  (measured on a live instance at ~6× on a small graph; scale-dependent).
 - **Seed with plain pgvector, not a BM25+vector hybrid.** Lexical fusion adds latency and can *hurt*
   ranking on this workload — the relationship recall comes from graph expansion, not lexical overlap.
-- **Treat the HNSW build as a one-time cost that scales with corpus size** (seconds at 10⁴ nodes,
-  minutes at 10⁵), independent of query latency. Storing embeddings as `halfvec` (fp16) cuts the
-  embedding-plus-HNSW-index storage ~2.5× vs fp32 (measured) at negligible recall cost — a cheap
-  lever for large graphs.
+- **Treat the HNSW build as a one-time cost that scales with corpus size** (indicatively seconds at
+  10⁴ nodes, minutes at 10⁵), independent of query latency. Storing embeddings as `halfvec` (fp16)
+  cuts the embedding-plus-HNSW-index storage ~2.5× vs fp32 (measured) at negligible recall cost — a
+  cheap lever for large graphs. It is **not** a drop-in edit of `schema.sql`: `vector_cosine_ops`
+  rejects `halfvec`, so switching the column type also requires `halfvec_cosine_ops` on the index
+  (or an expression index `((embedding::halfvec(1024)) halfvec_cosine_ops)`) *and* a matching
+  `::halfvec` cast on the bound query vector, or the `<=>` lookup fails with a missing-operator
+  error.
 - **Route simple, single-entity questions to the managed path first.** If a question needs no
   multi-hop traversal, ontology-enriched Genie or a plain vector lookup is cheaper; reserve GraphRAG
   for genuinely relational / multi-hop queries.
@@ -66,6 +79,9 @@ Defaults that keep retrieval fast, precise, and cost-predictable on real Lakebas
 The `nodes` / `edges` tables map to a portable **8-column triplet shape** — `subject_id, subject_type,
 predicate, object_id, object_type, confidence, source_method, source_agent` — so the same graph can be
 emitted or consumed by other graph stacks (Spark/Python builders, other engines) **without migration**.
+Undirected relations (`SUBSTITUTE_FOR`) are stored once with sorted endpoints and made bidirectional
+at query time by the retrieval SQL, so the view emits **both directions** for them — a directed
+consumer would otherwise miss the reverse. De-duplicate symmetric predicates on ingest.
 It's a column contract, not a dependency. See [`sql/gold_triplets_mapping.sql`](sql/gold_triplets_mapping.sql).
 
 ## Layout
@@ -91,17 +107,17 @@ graphrag/
 Validates the retrieval + build logic with no Lakebase, no model endpoint:
 
 ```bash
-cd graphrag
+cd agents/graphrag
 uv run --python 3.11 --with duckdb --with numpy smoketest/graphrag_logic_smoketest.py
 ```
 
-25 assertions: semantic seed, graph expansion surfacing connected context flat RAG misses,
-dangling-edge guard, blended-score ranking, depth bound.
+35 assertions: semantic seed, graph expansion surfacing connected context flat RAG misses,
+dangling-edge guard, blended-score ranking, depth bound, and the `seed_floor` distractor guard.
 
 ## Deploy (Asset Bundle)
 
 ```bash
-cd graphrag
+cd agents/graphrag
 # set your Lakebase database path + endpoints, then:
 databricks bundle deploy -t dev \
   --var lakebase_database="projects/<id>/branches/production/databases/<db>"
