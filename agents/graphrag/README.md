@@ -65,9 +65,15 @@ Two things matter more than the rest, both learned from running this live:
   retrieval SQL degrades toward an untyped walk. Constrain the predicate list in the prompt, and
   pass `allowed_predicates=DEFAULT_PREDICATES, on_unknown="drop"` as a backstop.
 
-`ai_query` note: its DDL-string `responseFormat` rejects a top-level array, so the extraction step
-uses the JSON-schema form to constrain the model and `from_json` to type the result. The SQL
-carries the exact error you get if you try it the other way.
+Two AI-Functions details the SQL had wrong until it was run against a live workspace, both now
+fixed and commented in place:
+
+- **`ai_parse_document` has no `document.text` field.** It returns schema v2.0, whose text lives
+  in `document.elements[].content` with a `type` per element. Reading `parsed:document.text`
+  yields NULL and the pipeline silently produces nothing — concatenate the text elements instead.
+- **`ai_query`'s DDL-string `responseFormat` rejects a top-level array.** Use the JSON-schema form
+  to constrain the model and `from_json` to type the result. The SQL carries the exact error you
+  get otherwise.
 
 ## Operational guardrails
 

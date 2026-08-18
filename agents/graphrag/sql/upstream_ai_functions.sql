@@ -15,10 +15,23 @@
 -- ---------------------------------------------------------------------------
 
 -- 1) PARSE — unstructured files (PDF/DOCX/HTML) in a Volume -> text.
+--    NOTE ON THE OUTPUT SHAPE (verified against a live workspace): ai_parse_document returns
+--    schema **version 2.0**, whose text lives in `document.elements[].content` with a `type` per
+--    element. There is NO `document.text` field — reading `parsed:document.text` yields NULL and
+--    the whole pipeline silently produces nothing. Concatenate the text elements instead.
 CREATE OR REPLACE TABLE ${var.catalog}.${var.schema}.doc_text AS
 SELECT
-    path                        AS doc_id,
-    ai_parse_document(content)  AS parsed
+    path AS doc_id,
+    concat_ws('\n\n', transform(
+        filter(
+            from_json(
+                to_json(ai_parse_document(content):document.elements),
+                'ARRAY<STRUCT<content:STRING, type:STRING, id:INT>>'
+            ),
+            e -> e.type = 'text'          -- also 'table', 'figure', ... — include what you need
+        ),
+        e -> e.content
+    )) AS text
 FROM READ_FILES(
     '/Volumes/${var.catalog}/${var.schema}/${var.docs_volume}/',
     format => 'binaryFile'
@@ -35,7 +48,7 @@ SELECT
     p.col                                       AS text
 FROM ${var.catalog}.${var.schema}.doc_text
 LATERAL VIEW posexplode(
-    split(parsed:document.text::string, '(?<=[.!?])\\s+')
+    split(text, '(?<=[.!?])\\s+')
 ) AS p;
 
 -- 3) EXTRACT — typed triples per passage via ai_query with a constrained response schema.
