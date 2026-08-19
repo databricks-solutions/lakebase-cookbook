@@ -63,6 +63,28 @@ lives in a dedicated `aimem` schema, created and owned by the app service
 principal, which mints short-lived OAuth tokens (auto-refreshed) as the Postgres
 password. Chat and embeddings use Databricks Foundation Model serving endpoints.
 
+The `memories.embedding` column is indexed with **HNSW** (`vector_cosine_ops`,
+`m = 16`, `ef_construction = 64`) — the same index type and parameters as the
+[GraphRAG](/docs/examples/graphrag/) example. HNSW rather than IVFFlat because
+this schema is created at application startup, against an empty table: IVFFlat
+derives its lists from a k-means step over the rows present at build time, so
+building it empty clusters poorly and degrades recall as the table grows. HNSW
+has no training step and can be built empty.
+
+Because `CREATE INDEX IF NOT EXISTS` matches on **name only**, the HNSW index uses
+a new name and the legacy `memories_embedding_idx` is dropped by name — otherwise
+an existing database would keep its IVFFlat index forever. That is the same
+migration the [Genie caching](/docs/examples/lakebase-genie-caching/) stores use,
+so an existing database converges on HNSW at the next start with no operator step.
+On a large existing table the rebuild is worth doing out of band first; the README
+has the `CONCURRENTLY` recipe and the measured cost.
+
+The index contract is checked offline by
+[`smoketest/aimem_index_smoketest.py`](https://github.com/databricks-solutions/lakebase-cookbook/tree/main/agents/ai_memory/smoketest/aimem_index_smoketest.py)
+(no Lakebase or model endpoint needed): the index type and opclass, that the
+switch actually takes effect on an existing database, parameter parity with the
+GraphRAG schema, re-runnable DDL, and statement ordering.
+
 ## Deploy
 
 <Callout type="note" title="Prerequisites">
