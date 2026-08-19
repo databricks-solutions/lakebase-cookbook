@@ -56,6 +56,89 @@ Everything lives in a dedicated `aimem` schema, created and owned by the app
 the Postgres password. Chat and embeddings use Databricks Foundation Model
 serving endpoints.
 
+### Semantic-recall index
+
+`memories.embedding` is indexed with **HNSW** using `vector_cosine_ops`
+(`m = 16`, `ef_construction = 64`) — the same index type and parameters as the
+[`graphrag`](../graphrag/) example, so the two pgvector examples agree.
+
+HNSW rather than IVFFlat because `ensure_schema` runs at application **startup**,
+which means the index is always created against an **empty table**. IVFFlat
+derives its lists from a k-means training step over the rows present at build
+time; built empty it clusters poorly (pgvector warns `ivfflat index created with
+little data`) and recall degrades once the table grows enough for the planner to
+start using the index. HNSW has no training step, so an empty-table build is
+sound. See [`smoketest/`](smoketest/) for the offline contract test.
+
+### Upgrading a database created before the HNSW switch
+
+`CREATE INDEX IF NOT EXISTS` matches on **name only** — Postgres never compares the
+definition — so reusing the old index name would leave an existing IVFFlat index in
+place forever. Instead the HNSW index gets a new name (`memories_embedding_hnsw_idx`)
+and the legacy `memories_embedding_idx` is dropped by name, which is the same
+migration the [Genie-caching](../../apps/lakebase-genie-caching/) stores use. An
+existing database therefore converges on HNSW on the next start, with no operator
+step. Both statements run in `ensure_schema`'s single transaction, so if the build
+fails the drop rolls back and the old index survives.
+
+**On a large existing table, do it out of band first.** The drop takes
+`ACCESS EXCLUSIVE` on `memories` for the rest of that transaction, so the rebuild
+blocks reads and writes until it commits — measured at roughly 13 s for 20k rows on a
+1024-dim column, and it is the app's startup path, so a big table can exceed the
+platform's health-check window. To avoid that, build the index yourself before
+deploying (neither `CONCURRENTLY` statement may run inside a transaction block):
+
+```sql
+CREATE INDEX CONCURRENTLY memories_embedding_hnsw_idx
+    ON "<schema>".memories USING hnsw (embedding vector_cosine_ops)
+    WITH (m = 16, ef_construction = 64);
+DROP INDEX CONCURRENTLY "<schema>".memories_embedding_idx;
+```
+
+Raising `maintenance_work_mem` for the session speeds the build up considerably. On
+the next start both statements are then no-ops. Verify with:
+
+```sql
+SELECT i.relname, am.amname, x.indisvalid
+FROM pg_index x
+JOIN pg_class i ON i.oid = x.indexrelid
+JOIN pg_class t ON t.oid = x.indrelid
+JOIN pg_namespace n ON n.oid = t.relnamespace
+JOIN pg_am am ON am.oid = i.relam
+WHERE n.nspname = '<schema>' AND t.relname = 'memories' AND am.amname = 'hnsw';
+```
+
+### Run the offline smoke test
+
+```bash
+cd agents/ai_memory
+uv sync
+uv run python smoketest/aimem_index_smoketest.py
+```
+
+Checks the index contract without any Lakebase or model endpoint: the index type and
+opclass, that the switch actually takes effect on an existing database, parameter
+parity with the `graphrag` example, re-runnable DDL, statement ordering, and schema
+and dimension parameterisation.
+
+### Two limitations worth knowing
+
+**`EMBEDDING_DIM` does not migrate an existing table.** `CREATE TABLE IF NOT
+EXISTS` leaves an existing `embedding vector(n)` column alone, so pointing
+`embedding_endpoint` at a model of a different dimensionality and changing
+`EMBEDDING_DIM` will fail at insert time with `expected <n> dimensions`. Changing
+dimensionality means migrating the column and re-embedding every stored fact.
+
+**Per-user recall relies on a planner choice, not a guarantee.** `recall()` filters
+`WHERE user_id = :u` and pgvector applies that filter *after* the ANN scan, which is
+bounded by `hnsw.ef_search` (default 40). Measured at 20k rows: with the ANN path
+forced, a user owning 0.5% of rows got 0.08 of 5 requested memories back and 92% of
+queries returned nothing; `hnsw.iterative_scan = relaxed_order` restored a full 5 of
+5. In practice the `memories_user_idx` btree saves you — at those small shares the
+planner prefers a btree scan plus an exact sort, and only switches to the ANN index
+at ~25% share, where truncation costs nothing. Keep that btree, and set
+`hnsw.iterative_scan` if you ever query the embedding without a selective filter.
+
 ## Deploy with Asset Bundles
 
 **Prerequisites**
