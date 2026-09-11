@@ -80,6 +80,16 @@ export const EXAMPLES: ExampleCard[] = [
     status: 'ready',
   },
   {
+    category: 'Developer Experience',
+    tag: 'Point-in-Time Recovery',
+    title: 'Recover a branch and repoint an app',
+    bracket: 'copy-on-write branch as-of, app repoint, one-variable redeploy',
+    description:
+      'A standalone script that recovers Lakebase data to an earlier point in time with copy-on-write branching, then repoints a running Databricks App at the recovered data — no restore job, no backup file, and the live branch is left untouched so you can compare before cutting over.',
+    href: '/docs/examples/point-in-time-recovery/',
+    status: 'ready',
+  },
+  {
     category: 'Apps',
     tag: 'FastAPI App',
     title: 'FastAPI backend on Lakebase',
