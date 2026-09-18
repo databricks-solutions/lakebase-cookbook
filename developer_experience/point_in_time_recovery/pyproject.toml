@@ -1,0 +1,26 @@
+# Managed with uv (https://docs.astral.sh/uv/). Lint/format with ruff.
+#   uv sync                 # install deps into .venv
+#   uv run ruff check .     # lint
+#   uv run ruff format .    # format
+#   uv run scripts/point_in_time_recovery.py --help
+[project]
+name = "point_in_time_recovery"
+version = "0.1.0"
+description = "Create a Lakebase point-in-time recovery branch and repoint an app at it."
+requires-python = ">=3.11"
+dependencies = [
+  "databricks-sdk>=0.81",  # w.postgres module (Lakebase branching) requires >=0.81
+  "psycopg[binary]>=3.2",
+]
+
+[dependency-groups]
+dev = [
+  "ruff",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

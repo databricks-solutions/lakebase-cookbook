@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Environment — never commit real secrets; keep only .env.example
+.env
+.env.local
+!.env.example
+
+# uv
+uv.lock
+
+# IDEs / OS
+.vscode/
+.idea/
+.DS_Store
