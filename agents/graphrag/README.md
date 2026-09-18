@@ -201,16 +201,94 @@ halves.
 **`source_class` is passed through verbatim, not normalised to two values.** It is whatever
 `n.props ->> 'source_method'` holds, defaulting to `inferred` only when the key is absent, so any
 producer's own label survives. In practice today you will see only `uc_certified` or `inferred`,
-because nothing in this repo writes `source_method` into **node** props yet — the `structured` and
+because [`graph_certified.py`](graph_certified.py) below builds nodes carrying `uc_certified`
+(**it writes nothing** — it returns rows and loading is the caller's job) and notebook step 4b sets
+the same key by hand. The `structured` and
 `llm_enrichment` values in [`sql/gold_triplets_mapping.sql`](sql/gold_triplets_mapping.sql) are
 **edge** provenance (`e.props`), a different table. The pass-through is future-proofing rather than a
 current collision. Only `uc_certified` is boosted; every other value carries weight `1.0`.
 **Branch on `== 'uc_certified'`, never on `!= 'inferred'`.**
 
-**Where certified nodes come from is deliberately not this example's business.** Anything that can
+**Ranking is independent of any one producer.** Anything that can
 write the `props` key participates — a Unity Catalog semantics exporter, a curation UI, a hand-written
 insert. That keeps the ranking seam independent of any one producer's availability, and it is why this
 half carries no new prerequisite beyond what the example already needs.
+
+## Certified core: Unity Catalog metric views as authoritative nodes
+
+The authority stage above boosts a node whose props carry `source_method: "uc_certified"`.
+[`graph_certified.py`](graph_certified.py) is what produces those nodes, from Unity Catalog
+**metric views** — the objects the docs call the core implementation of Unity Catalog semantics.
+
+Each metric view becomes a node, each field becomes a node, and a directional edge joins them:
+
+```
+metricview:cat.sch.order_details  --HAS_MEASURE-->    measure:cat.sch.order_details.total_revenue
+                                  --HAS_DIMENSION-->  dimension:cat.sch.order_details.ship_date
+```
+
+Fields are nodes rather than props on the view for a concrete reason: retrieval seeds on node
+embeddings and expands along edges, so a question about "revenue" must be able to match the
+*measure* and then reach its view. A measure buried in a JSON blob is unreachable, and authority
+ranking only ever re-orders nodes retrieval already found. That is also why `embedding_text()`
+embeds the display name, the description and the curator's synonyms rather than the column name —
+nobody asks a question using `total_revenue`.
+
+### The read path takes two queries
+
+| Source | Gives | Missing |
+| --- | --- | --- |
+| `information_schema.tables` (`table_type = 'METRIC_VIEW'`) | discovery | — |
+| `information_schema.columns` | names, types, comments | **cannot tell a measure from a dimension** |
+| `DESCRIBE EXTENDED <view>` | the measure flag, `display_name`, `synonyms`, `Owner`, `Created Time` | — |
+
+Both `data_type` and `full_data_type` report a measure as plain `bigint`; only DESCRIBE marks it,
+by suffixing the type with ` measure`. Since measure-versus-dimension *is* the semantic layer,
+DESCRIBE is not optional. It is this module's one brittle coupling, so it is isolated in
+`parse_describe()` and pinned against verbatim live output.
+
+`Owner` and `Created Time` are carried onto the view node. Retrieval does not consult them today,
+but they are the raw material for a richer authority function than "certified or not".
+
+### `information_schema.semantic_*` is not populated for native metric views
+
+`semantic_views`, `semantic_dimensions`, `semantic_metrics` and `semantic_relationships` look like
+exactly the structured source this should read. **They are not.** In one workspace survey, all 12
+catalogs exposing them were Snowflake connections surfaced through Lakehouse Federation, and the
+native catalog holding an actual Databricks metric view exposed none of them. The defensible reading: they are
+populated for **federated Snowflake** semantic views and not for native Databricks metric views.
+Whether that is permanent or simply not implemented yet is unknown — either way, reading them finds
+nothing for a Databricks metric view today, which is why this module does not.
+
+### Scope, and why only metric views are required
+
+Unity Catalog business semantics has four parts: metric views, **domains**, governed **Pages**, and
+**certification/deprecation** signals. Only metric views are required here, so the prerequisite
+stays "you have a metric view" and the example runs for a reader without an allow-list. The other
+three are deliberate future enrichment.
+
+Genie and Lakeview materialise their own metric views under
+`__databricks_internal_catalog_lakeview_*`; discovery filters them, because in one sample they
+outnumbered user objects on the first page of results.
+
+### Running it
+
+The builder is pure Python behind a `SqlReader` protocol, so it does not care how you reach Unity
+Catalog — `spark.sql`, the SQL connector, or the Statement Execution API all satisfy it. Notebook
+step 5 reads this workspace's metric views and reports what it would emit.
+
+**It writes nothing.** `certified_rows()` returns nodes and edges and stops there, which is what
+keeps the module testable with no database. Loading them is yours to do: note `graph_build.py`
+contains no loader either, and the notebook's load step is commented-out scaffolding, so there is
+no existing writer to reuse.
+
+**Loading them is necessary but not sufficient for the boost to fire.** Retrieval seeds only from
+`graph.node_embeddings`, so a certified node with no embedding can never be a seed; and this module
+emits only view→field edges, so nothing joins the certified subgraph to the business graph and
+expansion cannot reach it from a business seed. Until you embed these nodes — with
+`embedding_text()`, not the bare column name — and optionally add your own edges linking a measure
+to what it describes, authority ranking fires only when the question itself matches a metric-view
+field. That is a real constraint of this design, worth knowing before you calibrate the boost.
 
 ## Layout
 
@@ -226,10 +304,12 @@ graphrag/
 ├── graph_build.py       # pure assemble_graph(dims, enrichment) → (nodes, edges); guards the FK
 ├── graph_retrieve.py    # pure in-memory twin of the retrieval SQL (for offline dev/test)
 ├── graph_upstream.py    # documents → chunk → extract → entity resolution → gold_triplets
+├── graph_certified.py     # Unity Catalog metric views -> certified nodes/edges
 ├── notebooks/
 │   └── graphrag_build_and_query.py   # build the graph, embed, write to Lakebase, query
 └── smoketest/
-    └── graphrag_logic_smoketest.py   # offline validation (no Lakebase needed)
+    ├── graphrag_logic_smoketest.py   # offline validation (no Lakebase needed)
+    └── certified_core_smoketest.py   # DESCRIBE parsing + projection (no warehouse needed)
 ```
 
 ## Run the offline smoke test
@@ -247,6 +327,19 @@ authority ranking (certified-over-inferred, the positive-score and below-1.0 cla
 float, a string — reaching neither an exception nor a non-finite score, unrounded ordering,
 verbatim `source_class`),
 dangling-edge guard, blended-score ranking, depth bound, and the `seed_floor` distractor guard.
+
+The certified-core builder has its own suite, which needs no warehouse — the `SqlReader` protocol
+lets a fake replay recorded output:
+
+```bash
+uv run --python 3.11 smoketest/certified_core_smoketest.py
+```
+
+Its `DESCRIBE` fixture is verbatim live output, because parsing `DESCRIBE` is the module's one
+brittle coupling and inventing its shape would prove nothing. It covers measure-vs-dimension
+detection, a field named `# Orders` (which must not be mistaken for the metadata boundary),
+3-column and 2-column `DESCRIBE` rows, malformed metadata JSON, and rejection of catalog names
+that would otherwise be interpolated into SQL.
 
 ## Deploy (Asset Bundle)
 
@@ -273,6 +366,10 @@ small example supply-chain graph and embeds its nodes via your embedding endpoin
 - Databricks workspace with **Lakebase (Autoscaling)** enabled
 - A model-serving **embeddings** endpoint and a **chat** endpoint registered in the workspace
 - `databricks` CLI + `uv`
+- `graph.nodes` must have a `props` column — it is in [`sql/schema.sql`](sql/schema.sql), but a
+  graph built by an older or bespoke script may lack it; see the note under Operational guardrails
+- **For the certified core only:** at least one Unity Catalog **metric view** you can read. Nothing
+  else in the example needs it, and the ranking behaves identically without one
 
 ---
 

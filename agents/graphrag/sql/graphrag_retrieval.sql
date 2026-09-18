@@ -155,8 +155,11 @@ FROM (
         s.rels,
         ROUND(s.graph_score::numeric, 4)                    AS score,
         -- Passed through verbatim, NOT normalised to a two-value domain, so that any producer's
-        -- own label survives. Today nothing in this repo writes source_method into NODE props,
-        -- so in practice you will see only 'uc_certified' or 'inferred' — the 'structured' /
+        -- own label survives. In practice you will see only 'uc_certified' or 'inferred':
+        -- graph_certified.py BUILDS nodes carrying 'uc_certified' (it returns them; loading is
+        -- the caller's job) and notebook step 4b sets the same key by hand. Note graph_upstream.py
+        -- does write source_method ('llm_extract', 'entity_resolution') but on EDGE props, which
+        -- this expression does not read. The 'structured' /
         -- 'llm_enrichment' values in sql/gold_triplets_mapping.sql are EDGE provenance
         -- (e.props), a different table, and are not a live source of node values. The
         -- pass-through is future-proofing, not a current collision. Only 'uc_certified' is
