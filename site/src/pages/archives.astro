@@ -5,6 +5,7 @@ import { ARCHIVE, type MediaType } from '../data/archives';
 const tagClass: Record<MediaType, string> = {
   Video: 'border-[var(--color-lava-600)] text-[var(--color-lava-600)]',
   Blog: 'border-[var(--color-ink)] text-[var(--color-ink)]',
+  'Customer Story': 'border-[var(--color-ink)] bg-[var(--color-ink)] text-white',
   Announcement: 'border-[var(--color-ink)] text-[var(--color-ink)]',
 };
 
@@ -25,7 +26,7 @@ function toTimestamp(date: string): number {
 const entries = [...ARCHIVE].sort((a, b) => toTimestamp(b.date) - toTimestamp(a.date));
 
 // Media-type filter: "All" (default) plus one per media type present.
-const mediaTypes: MediaType[] = ['Video', 'Blog', 'Announcement'];
+const mediaTypes: MediaType[] = ['Video', 'Blog', 'Customer Story', 'Announcement'];
 const filters: { id: string; label: string; count: number }[] = [
   { id: 'all', label: 'All', count: entries.length },
   ...mediaTypes.map((t) => ({
@@ -38,15 +39,15 @@ const filters: { id: string; label: string; count: number }[] = [
 
 <BaseLayout
   title="Archives"
-  description="A curated archive of videos, blogs, and announcements highlighting the success of Databricks Lakebase."
+  description="A curated archive of videos, blogs, customer stories, and announcements highlighting the success of Databricks Lakebase."
 >
   <span class="tag-chip">Archives</span>
   <h1 class="mt-5 text-4xl font-light tracking-tight sm:text-5xl">
     Lakebase in the wild
   </h1>
   <p class="mt-4 mb-8 max-w-3xl text-[var(--color-muted)]">
-    A curated archive of videos, blogs, and announcements highlighting the
-    success of Databricks Lakebase. To add an entry, open a pull request against{' '}
+    A curated archive of videos, blogs, customer stories, and announcements
+    highlighting the success of Databricks Lakebase. To add an entry, open a pull request against{' '}
     <a
       href="https://github.com/databricks-solutions/lakebase-cookbook/pulls"
       target="_blank"
