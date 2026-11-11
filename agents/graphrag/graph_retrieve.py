@@ -57,6 +57,10 @@ def retrieve(
       `authority_score` is the rounded value for display; ordering deliberately does not use
       it (see the note in the assemble step).
     """
+    # float() so a numeric string works here as it does in the SQL, and a NaN floor admits no
+    # seed in either half. None still raises TypeError here.
+    seed_floor = float(seed_floor)
+
     # 1) semantic seed — top-k by cosine similarity, above the seed_floor.
     #    `any(emb)` skips a degenerate all-zero embedding: it has no direction, so its
     #    similarity is undefined. The SQL twin excludes the same case by comparing on
@@ -113,13 +117,13 @@ def retrieve(
     #      * the sort uses the UNROUNDED key; ordering by the rounded output would collapse
     #        scores differing beyond 4 dp into ties (0.175024 / 0.175006 -> 0.1750) and let
     #        the tiebreak reorder them, which is not a no-op.
-    # Clamped to >= 1.0, mirroring GREATEST(:authority_boost, 1.0) in the SQL. `score > 0`
+    # Clamped to >= 1.0, mirroring GREATEST(authority_boost, 1.0) in the SQL. `score > 0`
     # below stops a NEGATIVE score being made worse; this stops a boost BELOW 1.0 doing the
     # same thing to a positive one. Together they guarantee a boost can never rank a certified
     # node lower than it would have sat unboosted, whatever the caller passes.
     # NaN needs its own arm: max(nan, 1.0) is nan, so it slips past the clamp, and the two
     # halves then disagree in OPPOSITE directions — Python sorts nan low (demoting the node)
-    # while Postgres numeric NaN sorts greater than everything (promoting it to rank 1). NaN is
+    # while Postgres NaN sorts greater than everything (promoting it to rank 1). NaN is
     # reachable whenever a caller derives the boost from a score ratio. `x != x` is the portable
     # NaN test.
     # Converted, then clamped. float() honours an int, a Decimal or a numeric string; what

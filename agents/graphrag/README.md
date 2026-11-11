@@ -11,7 +11,10 @@ knowledge graph so retrieval can **traverse relationships**, not just match text
 - **Traversal** — a **recursive CTE** walks edges out from a seed, bounded by `max_hops`.
 - **Semantic seed** — **pgvector** HNSW (cosine) finds the entry nodes for a question.
 - **Hybrid retrieval** — seed with vectors, expand along the graph, rank by a blended
-  `seed_similarity × 0.5^hop` score. See [`sql/graphrag_retrieval.sql`](sql/graphrag_retrieval.sql).
+  `seed_similarity × 0.5^hop` score. See [`sql/graphrag_retrieval.sql`](sql/graphrag_retrieval.sql), which runs
+  with psycopg 3 as `cur.execute(sql, params)`, `params` being a dict of its five binds. Earlier
+  revisions used `:name` binds; if you ran the file through SQLAlchemy `text()` or psql
+  variables, switch to psycopg or translate the five `%(name)s` placeholders.
 
 A generic Databricks **model-serving** endpoint supplies embeddings and answer synthesis — swap in
 whichever provider your workspace has registered. Nothing here is cloud-specific.
@@ -90,27 +93,26 @@ Defaults that keep retrieval fast, precise, and cost-predictable on real Lakebas
   similarities span only `0.38`-`0.71`, so a `0.3` floor changes nothing while `0.555` drops
   every distractor and keeps every on-topic node (the on-topic supplier below the floor still
   arrives via graph expansion). Cosine ranges
-  `[-1, 1]`, so `-1.0` keeps all seeds (identical to no floor). **`:seed_floor` is a required
-  bind** — Postgres has no server-side default for a named parameter, so existing callers of the
-  SQL must pass it even to keep the old behavior (bind `-1.0`); omitting a required bind raises a
-  `bind message supplies N parameters, but prepared statement requires N+1` error. The exact
-  numbers depend on the driver, since `:query_embedding` appears three times and drivers differ
-  on whether repeated names collapse to one bind. The Python twin
+  `[-1, 1]`, so `-1.0` keeps all seeds (identical to no floor). **`seed_floor` is a required
+  bind** — a named parameter has no default, so existing callers of the SQL must pass it even to
+  keep the old behavior (bind `-1.0`); with psycopg, omitting it raises
+  `query parameter missing: seed_floor` before the query is sent. The Python twin
   defaults it to `-1.0`, so Python callers need no change. **Watch the empty-seed case:** a floor
   above every node's similarity empties the seed CTE and the query returns *zero* rows — detect
   that in your caller and either retry at `-1.0` or decline to answer, rather than synthesizing
-  from no context. See `:seed_floor` in
+  from no context. See `seed_floor` in
   [`sql/graphrag_retrieval.sql`](sql/graphrag_retrieval.sql).
-- **`:authority_boost` is a required bind, exactly like `:seed_floor`.** Adding it changes the SQL's
-  parameter arity, so an existing caller that does not pass it raises
-  `bind message supplies 4 parameters, but prepared statement requires 5` — the ranking is
+- **`authority_boost` is a required bind, exactly like `seed_floor`.** Adding it changes the
+  SQL's parameters, so an existing caller that does not pass it raises
+  `query parameter missing: authority_boost` — the ranking is
   backward-compatible, the *bind signature* is not. Bind `1.0` to keep the previous behaviour
   exactly. The Python twin defaults it to `1.0`, so Python callers need no change. Values below
   `1.0` are clamped up to `1.0` in both halves, because a fractional or negative multiplier would
   demote the certified node the boost exists to promote. **A non-finite or absent boost means "no
   boost":** NaN, +/-Infinity and NULL all resolve to `1.0` on both halves rather than erroring,
   since a boost derived from a score ratio can reach any of them; a Decimal or numeric string is
-  honoured normally. Calibrate it once a certified core actually
+  honoured normally. In SQL, a boost that does not cast to a double (a bool, a non-numeric string,
+  or a value outside double range such as `10**400`) fails the query, where the twin uses `1.0`. Calibrate it once a certified core actually
   exists — start around `1.2`-`2.0` and check against your own graph, since the useful value depends
   on the score gaps your embedding model produces, not on a portable constant.
 - **Keep a minimum Lakebase compute above zero for latency-sensitive serving.** After scale-to-zero,
@@ -153,7 +155,7 @@ A node marked as certified carries it in `props`, the same place edges already c
 {"source_method": "uc_certified"}
 ```
 
-Retrieval then multiplies that node's score by `:authority_boost` and returns two extra columns:
+Retrieval then multiplies that node's score by `authority_boost` and returns two extra columns:
 `source_class` (`uc_certified` / `inferred`) so an answer can cite what resolved it, and
 `authority_score`, the rounded weighted value. Note the ordering uses the UNROUNDED
 weighted score, not this column — see the caveats below before re-sorting client-side on it.
@@ -165,11 +167,12 @@ both directions: a sufficient boost *does* promote a certified node to rank 1, a
 *does not* let the least relevant certified node reach rank 1. A sort-key implementation passes the
 first and fails the second. Both halves are covered, including the negative-score and
 below-1.0-boost guards. Note the SQL side is exercised as a **hand transcription** of the assemble
-stage against its own fixture, not by running `sql/graphrag_retrieval.sql` itself — nothing ties the
-two together, so a change to the query must be mirrored in the test by hand. Only a live Lakebase run
+stage against its own fixture, not by running `sql/graphrag_retrieval.sql` itself. The suite reads
+the real file only to check its bind placeholders (TEST 9), so a change to the query logic must be
+mirrored in the test by hand. Only a live Lakebase run
 exercises the real file.
 
-**`:authority_boost` defaults to 1.0, which leaves every weight at 1.0.** Scores are then unchanged
+**`authority_boost` defaults to 1.0, which leaves every weight at 1.0.** Scores are then unchanged
 and distinctly-scored rows keep their relative order. It is **not** a byte-identical no-op, though,
 and the difference is not hypothetical — measured live against a 1219-node graph, two pairs in the
 top ten were exact score ties (`0.2945` and `0.1473`), and they now order deterministically by
@@ -245,7 +248,7 @@ nobody asks a question using `total_revenue`.
 Both `data_type` and `full_data_type` report a measure as plain `bigint`; only DESCRIBE marks it,
 by suffixing the type with ` measure`. Since measure-versus-dimension *is* the semantic layer,
 DESCRIBE is not optional. It is this module's one brittle coupling, so it is isolated in
-`parse_describe()` and pinned against verbatim live output.
+`parse_describe()` and pinned against captured live output.
 
 `Owner` and `Created Time` are carried onto the view node. Retrieval does not consult them today,
 but they are the raw material for a richer authority function than "certified or not".
@@ -321,12 +324,15 @@ cd agents/graphrag
 uv run --python 3.11 --with duckdb --with numpy smoketest/graphrag_logic_smoketest.py
 ```
 
-134 assertions: semantic seed, graph expansion surfacing connected context flat RAG misses,
+142 assertions: semantic seed, graph expansion surfacing connected context flat RAG misses,
 authority ranking (certified-over-inferred, the positive-score and below-1.0 clamps, NaN /
 +Infinity / None boosts asserted on BOTH halves, odd bind types — Decimal, an int wider than a
-float, a string — reaching neither an exception nor a non-finite score, unrounded ordering,
+float, a string — reaching neither an exception nor a non-finite score in the Python twin (in
+SQL a boost beyond double-precision range fails the query), unrounded ordering,
 verbatim `source_class`),
-dangling-edge guard, blended-score ranking, depth bound, and the `seed_floor` distractor guard.
+dangling-edge guard, blended-score ranking, depth bound, the `seed_floor` distractor guard, and
+the retrieval SQL's bind contract (exactly the five psycopg placeholders, each with its cast, none
+malformed, no stray `%`, no leftover `:name`).
 
 The certified-core builder has its own suite, which needs no warehouse — the `SqlReader` protocol
 lets a fake replay recorded output:
@@ -335,7 +341,7 @@ lets a fake replay recorded output:
 uv run --python 3.11 smoketest/certified_core_smoketest.py
 ```
 
-Its `DESCRIBE` fixture is verbatim live output, because parsing `DESCRIBE` is the module's one
+Its `DESCRIBE` fixture is captured live output (identifying values replaced), because parsing `DESCRIBE` is the module's one
 brittle coupling and inventing its shape would prove nothing. It covers measure-vs-dimension
 detection, a field named `# Orders` (which must not be mistaken for the metadata boundary),
 3-column and 2-column `DESCRIBE` rows, malformed metadata JSON, and rejection of catalog names

@@ -4,7 +4,7 @@ WHAT THIS PROVES (offline, no Databricks / no Lakebase / no model endpoint):
   1. The vector-seed step ranks the semantically-closest node first.
   2. The recursive-CTE graph expansion pulls in graph-connected context that a
      pure vector search would MISS — the whole point of GraphRAG — bounded by
-     :max_hops with a working cycle guard.
+     max_hops with a working cycle guard.
   3. The blended score (seed_similarity * 0.5^hop) ranks seeds above their
      neighbors and decays with hop distance.
   4. The BUILD-side graph assembly (notebooks/graph_build.assemble_graph) turns
@@ -798,14 +798,15 @@ def main() -> int:
     def authority_sql(boost):
         """A TRANSCRIPTION of the assemble stage of sql/graphrag_retrieval.sql, DuckDB dialect.
 
-        NOT the file itself — nothing ties the two together, so any change to the real query's
+        NOT the file itself — TEST 9 reads the .sql only for its bind placeholders, so any change
+        to the real query's
         weight, clamp, non-finite guard, ordering or source_class handling must be mirrored here
         by hand. This has already drifted twice: the positive-score guard and then the GREATEST
         clamp each landed in the .sql file one step before this copy, and the suite stayed green
-        in between. There is no automated drift detector; nothing in this suite reads the .sql.
+        in between. There is no automated drift detector for the query logic.
 
         A TRANSCRIPTION, not the file. The dialect differs throughout — json_extract_string vs
-        `->>`, DOUBLE vs numeric (DuckDB's DECIMAL cannot hold NaN), no LIMIT, fewer columns —
+        `->>`, no LIMIT, fewer columns —
         and DuckDB types each `?` independently where Postgres resolves one type for the named
         parameter. So this exercises the guard's LOGIC and never the Postgres bind-typing path.
         `boost` is a real bind because NaN cannot be interpolated as a bare literal. The shipped
@@ -1031,7 +1032,7 @@ def main() -> int:
             True,
         )
 
-    # A Decimal boost must be HONOURED, not collapsed — it is what a NUMERIC bind hands back.
+    # A Decimal boost must be HONOURED, not collapsed.
     flt = agent_retrieve(q, certified, bedges, a_emb, seed_k=6, max_hops=2, authority_boost=2.0)
     try:
         # Caught, not called bare: a regressed guard raises TypeError here (max(Decimal, 1.0)
@@ -1049,7 +1050,7 @@ def main() -> int:
         [r["node_id"] for r in flt],
     )
 
-    # A NUMERIC bind arrives as Decimal, and an int can exceed float range. Neither may raise out
+    # A caller may pass a Decimal, and an int can exceed float range. Neither may raise out
     # of retrieval, and neither may leak a Decimal into `score * weight`.
     for odd, label in [
         (Decimal("2.0"), "Decimal(2.0)"),
@@ -1073,6 +1074,52 @@ def main() -> int:
         check(f"py: boost={label} does not raise and stays finite", ok, True)
 
     acon.close()
+
+    # ---- 9) the retrieval SQL's bind contract, read from the shipped file
+    # Nothing else here reads sql/graphrag_retrieval.sql, so a renamed bind, a stray percent
+    # sign (psycopg parses comments too) or a reintroduced :name bind would otherwise surface
+    # only at runtime. Checked offline, with no database.
+    print("\n== TEST 9: retrieval SQL bind contract (psycopg named binds) ==")
+    import re
+
+    sql_path = os.path.join(os.path.dirname(__file__), "..", "sql", "graphrag_retrieval.sql")
+    with open(sql_path, encoding="utf-8") as fh:
+        sql = fh.read()
+    binds = {"query_embedding", "seed_k", "max_hops", "seed_floor", "authority_boost"}
+    sql = sql.replace("%%", "")  # an escaped %% is literal text to psycopg, never a bind
+    placeholders = set(re.findall(r"%\((\w+)\)s", sql))
+    check("sql: placeholders are exactly the five binds", placeholders, binds)
+    check("sql: no stray percent sign", re.findall(r"%(?![(])", sql), [])
+    check("sql: every %( is a complete %(name)s", re.findall(r"%\((?!\w+\)s)", sql), [])
+    colon_bind = r"(?<![:\w]):(?:" + "|".join(sorted(binds)) + r")\b"
+    check("sql: no :name binds left", re.findall(colon_bind, sql), [])
+    code = re.sub(r"--[^\n]*", "", sql)  # executable SQL only: a commented-out guard must not count
+    casts = {"query_embedding": "::vector", "seed_floor": "::float8", "authority_boost": "::float8"}
+    used = set(re.findall(r"%\((\w+)\)s(::\w+)?", code))
+    check("sql: every use of a bind carries its cast", used, {(b, casts.get(b, "")) for b in binds})
+    # The whole seed predicate, whitespace-normalised, so an AND flipped to OR or a reversed
+    # comparison fails here too. Only running the file against Postgres would pin the rest.
+    seed_where = (
+        "WHERE (e.embedding <=> %(query_embedding)s::vector) <= (1 - %(seed_floor)s::float8)"
+        " AND %(seed_floor)s::float8 <> 'NaN'::float8"
+    )
+    seed_cte = " ".join(code.split("adj AS")[0].split())
+    check("sql: the seed floor predicate and NaN guard are intact", seed_where in seed_cte, True)
+
+    # the twin's side of the same contract: a numeric string floor, and a NaN floor. Caught, not
+    # called bare, so a regression reports one FAIL instead of aborting the run.
+    def floor_run(seed_floor):
+        try:
+            return agent_retrieve(
+                q, bnodes, bedges, a_emb, seed_k=6, max_hops=2, seed_floor=seed_floor
+            )
+        except Exception as err:  # noqa: BLE001
+            return f"{type(err).__name__}: {err}"
+
+    check(
+        "py: a numeric-string seed_floor ranks as the float does", floor_run("0.4"), floor_run(0.4)
+    )
+    check("py: a NaN seed_floor admits no seed", floor_run(math.nan), [])
 
     print("\n" + "=" * 60)
     if FAILURES:
