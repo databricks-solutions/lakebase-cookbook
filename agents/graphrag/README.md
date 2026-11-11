@@ -293,6 +293,100 @@ expansion cannot reach it from a business seed. Until you embed these nodes — 
 to what it describes, authority ranking fires only when the question itself matches a metric-view
 field. That is a real constraint of this design, worth knowing before you calibrate the boost.
 
+## Property graph queries: SQL functions and openCypher
+
+The retrieval query above answers "what is near this seed". Questions that follow specific
+relationships ("who is the mother of the director of this film?") are a different shape, and the
+same two tables answer them too. `sql/graph_functions.sql` adds, on top of `schema.sql`:
+
+| Function | Returns |
+|---|---|
+| `graph.neighbors(start_id, max_hops, rel_types, direction)` | Every node reachable within the hop limit, with its shortest hop count |
+| `graph.shortest_path(src_id, dst_id, max_hops, rel_types, direction)` | One shortest path, as an array of node ids |
+| `graph.follow(start_id, rel_path)` | Every node reached by following a fixed sequence of relationship types |
+
+plus a btree index on `nodes.name` for exact lookups (the trigram index serves fuzzy ones) and a
+`graph.edges_both` view for undirected patterns. All of it is plain SQL and PL/pgSQL. Apply it
+after `schema.sql`; the notebook applies only `schema.sql`, so run this file yourself:
+
+```bash
+psql "$LAKEBASE_DSN" -f sql/graph_functions.sql
+```
+
+```sql
+SELECT node_id FROM graph.follow('film:up', ARRAY['DIRECTOR', 'MOTHER']);
+```
+
+For ad hoc questions, `pgcypher/` compiles a read-only subset of openCypher into **one** SQL
+query over the same tables. It is a plain package in this folder, so run from `agents/graphrag`
+or put that folder on `sys.path` (from the notebook, `sys.path.append("..")`). Every value is a bind parameter, and anything outside the subset
+(OPTIONAL MATCH, WITH, writes, unbounded paths) is rejected rather than approximated:
+
+```python
+from pgcypher.compiler import compile_cypher, run
+
+query = "MATCH (f {name: $film})-[:DIRECTOR]->(d)-[:MOTHER]->(m) RETURN DISTINCT m.name"
+rows = run(conn, query, {"film": "Up"})  # conn: a psycopg connection to Lakebase
+print(compile_cypher(query, {"film": "Up"}).sql)  # the generated SQL: plain joins
+```
+
+The mapping onto the recipe schema: a node's label is `node_type`, its `name` property is the
+`name` column and every other property lives in `props`; a relationship's type is `rel`. A property
+stored as JSON `null` reads as missing, as Cypher has no null properties. Edges have no id column,
+so a relationship is identified by its key `(src_id, dst_id, rel)` and returned as
+`[src_id, dst_id, rel]`. The variable-length patterns in one query may total at most 6 hops,
+because the number of trails grows exponentially with hops around hub nodes; pass `max_hops=` to
+raise the cap deliberately. A node, relationship or path compares only with another of its kind,
+and `<` or `>` between two lists is null rather than Cypher's element-by-element order. Property
+map values are literals or parameters, as in Cypher. ORDER BY on list values orders them as
+Postgres orders jsonb, so strings inside lists follow the database collation (code point order on
+Lakebase's default `C.UTF-8`).
+
+**Relationship uniqueness.** Cypher never binds the same relationship twice in one match, though a
+path may revisit a node. Around a triangle of three people who all know each other, three
+undirected hops give 6 matches under that rule and 24 without it. The compiler enforces the rule
+across the whole MATCH, and variable-length patterns compile to a recursive CTE whose Postgres
+`CYCLE` clause is keyed on the edge key, not the node: keyed on `node_id` instead, it would forbid
+revisiting a node, which is stricter than Cypher. For undirected walks the key comes from
+`edges_both.key_src` / `key_dst`, so crossing an edge back the other way counts as the same edge.
+
+**Tests** (`tests/`) need a Postgres database they may overwrite: its `graph` schema is dropped and
+rebuilt from `schema.sql` and `graph_functions.sql`, so they run on the recipe's own tables. That
+database needs the `vector`, `ltree` and `pg_trgm` extensions `schema.sql` creates. Lakebase has
+all three; a stock local Postgres usually needs pgvector installed first. As a guard, the tests
+refuse to drop a `graph` schema whose `nodes` table has rows, and drop their own schema when they
+finish, so pointing them at the database you serve from stops the run rather than emptying it.
+
+```bash
+cd agents/graphrag
+export PGRAPH_DSN="postgresql://..."   # NOT a database whose graph schema you need
+uv run --with pytest pytest tests -q
+```
+
+- `test_golden.py`: hand-computed answers on a small films-and-people graph, checked against both
+  the compiled SQL and a brute-force reference matcher (`pgcypher/reference.py`), plus rejection
+  of unsupported queries and a check that values never reach the SQL text.
+- `test_differential.py`: 300 random graphs (self loops, several relationship types between the
+  same two nodes, missing properties) with 4 random queries each; the compiled SQL must return
+  exactly what the reference matcher returns.
+- `test_functions.py`: the three SQL functions by hand, then on 150 random graphs against a
+  Python breadth-first search.
+- `test_pgq_crosscheck.py`: compares against Postgres's own SQL/PGQ `GRAPH_TABLE`, which was
+  committed to the Postgres development branch and reverted before Postgres 19. It is skipped
+  unless `PGRAPH_PGQ_DSN` points at a server built from commit `6168c65`.
+- `seeded_bugs.py` (a script, not a test): checks that the randomized tests catch a wrong
+  compiler. It seeds four bugs in memory (no relationship uniqueness, nulls sorted first, an edge
+  repeated inside a variable-length path, undirected treated as outgoing), each a one-line text
+  change or, for uniqueness, the method replaced by a no-op. It runs `test_differential.py`
+  against each and exits 1 if any bug gives no wrong answer, or 2 if a result cannot be measured or
+  trusted, such as no `PGRAPH_DSN`, a stale bug entry or a clean compiler that fails (the reason is
+  printed). Run it with `uv run --with pytest python tests/seeded_bugs.py` and the same
+  `PGRAPH_DSN`.
+
+**When not to use this.** It covers the common case of a few hops over data that already lives in
+Postgres. The hop limits are deliberate. Deep traversals over dense graphs, whole-graph algorithms
+such as PageRank and graph-native write workloads belong in a dedicated graph engine.
+
 ## Layout
 
 ```
@@ -303,16 +397,19 @@ graphrag/
 │   ├── schema.sql              # nodes / edges / node_embeddings + HNSW / ltree / pg_trgm
 │   ├── graphrag_retrieval.sql  # hybrid: pgvector seed (+ seed_floor) → recursive-CTE expansion → ranked context
 │   ├── gold_triplets_mapping.sql  # portable 8-column triplet view over nodes/edges (cross-stack interop)
-│   └── upstream_ai_functions.sql  # parse + typed extract (AI Functions) + pg_trgm blocking
+│   ├── upstream_ai_functions.sql  # parse + typed extract (AI Functions) + pg_trgm blocking
+│   └── graph_functions.sql     # neighbors / shortest_path / follow + name index + edges_both view
+├── pgcypher/            # openCypher subset → one SQL query (parser, compiler, reference matcher)
 ├── graph_build.py       # pure assemble_graph(dims, enrichment) → (nodes, edges); guards the FK
 ├── graph_retrieve.py    # pure in-memory twin of the retrieval SQL (for offline dev/test)
 ├── graph_upstream.py    # documents → chunk → extract → entity resolution → gold_triplets
 ├── graph_certified.py     # Unity Catalog metric views -> certified nodes/edges
 ├── notebooks/
 │   └── graphrag_build_and_query.py   # build the graph, embed, write to Lakebase, query
-└── smoketest/
-    ├── graphrag_logic_smoketest.py   # offline validation (no Lakebase needed)
-    └── certified_core_smoketest.py   # DESCRIBE parsing + projection (no warehouse needed)
+├── smoketest/
+│   ├── graphrag_logic_smoketest.py   # offline validation (no Lakebase needed)
+│   └── certified_core_smoketest.py   # DESCRIBE parsing + projection (no warehouse needed)
+└── tests/               # property graph tests against a real Postgres (PGRAPH_DSN)
 ```
 
 ## Run the offline smoke test
